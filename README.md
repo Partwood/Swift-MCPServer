@@ -1,101 +1,59 @@
-# MCPServer
+# Swift MCP Server
 
-A Swift-based Model Context Protocol (MCP) server implementation using Vapor framework.
-
-## Overview
-
-This project implements an MCP server that can communicate with language models and other clients through the Model Context Protocol. The server provides tools, resources, and capabilities for integration with AI systems.
+A Swift-based Model Context Protocol (MCP) server designed to facilitate communication between clients and backend services. This project provides a framework for building scalable and efficient MCP servers in Swift.
 
 ## Features
 
-- **MCP Protocol Implementation**: Supports the Model Context Protocol specification (version 2025-06-18)
-- **Tool Integration**: Provides various tools that can be called by clients
-- **Completions Support**: Offers completion suggestions for prompts
-- **REST API**: Exposes endpoints for MCP communication
-- **WebSocket Support**: Optional WebSocket connectivity
-- **Cross-platform**: Works on macOS and iOS (version 13+)
+- **Modular Architecture**: Easily extendable with custom tools and data structures.
+- **Tool Integration**: Built-in support for various tools like file I/O, date operations, and Xcode interactions.
+- **Data Structures**: Customizable data structures to handle complex data types.
+- **Logging**: Integrated logging for debugging and monitoring.
 
-## Architecture
+## Components
 
-The server is structured into several key components:
+### Core Server
+The core server (`MCPServer.swift`) handles the primary logic for managing connections, requests, and responses. It integrates with various tools and extensions to provide a seamless experience.
 
-### Core Components
+### Tools
+Tools are modular components that perform specific tasks:
+- **FileIO**: Handles file operations such as reading, writing, and directory listing.
+- **Dates**: Provides utilities for date and time manipulations.
+- **XCode**: Interfaces with Xcode command-line tools for project management.
 
-1. **MCPServer**: Main class that handles MCP protocol implementation
-2. **MCPRequest/MCPResponse**: Data structures for request/response handling
-3. **ServerInfo**: Contains metadata about the server
-4. **MCPError**: Error handling structure
+### Data Structures
+Custom data structures to support complex data types:
+- **AnyCodable**: A type-erased wrapper for `Encodable` and `Decodable` types.
+- **DataStructs**: Additional utility structures for common use cases.
 
-### Tools Directory
+### Extensions
+Extensions provide additional functionality to existing types:
+- **URL Extensions**: Enhances URL handling capabilities.
+- **Encodable Extensions**: Adds convenience methods for encoding data.
 
-The `Tools` directory contains implementations of various tools:
-- **FileIO.swift**: File system operations and I/O capabilities
-- **XCode.swift**: Xcode project utilities
-- **Dates.swift**: Date and time related functions
-- **MCPTool**: Base class for tool implementations
+## Usage
 
-### Data Structures Directory
+To use this MCP server in your project, add it as a dependency in your `Package.swift`:
 
-Contains utility types:
-- **AnyCodable**: Type erasure for Codable values
-- **DataStructs.swift**: Core data structures
-- **Extensions.swift**: Utility extensions
-
-### Extensions Directory
-
-Provides extensions to standard libraries:
-- **extEncodable.swift**: Encoding utilities
-- **extURL.swift**: URL handling extensions
-
-## Configuration
-
-The server can be configured with:
-- Server name
-- Hostname and port
-- Optional URL provider for dynamic URL resolution
-
-Example configuration:
 ```swift
-let mcpServer = try MCPServer.startMCP(
-    serverName: "MyMCPServer",
-    title: "My MCP Server",
-    hostname: "localhost",
-    port: 8000,
-    urlProvider: myURLProvider
-)
+dependencies: [
+    .package(url: "https://github.com/Partwood/Swift-MCPServer.git", from: "1.0.0")
+]
 ```
 
-## API Endpoints
+Then import the package in your code:
 
-- `POST /mcp`: Handle MCP requests
-- `GET /mcp`: Retrieve server information and capabilities
-- `OPTIONS /mcp`: CORS preflight handling
-- `WebSocket /mcp-ws`: Optional WebSocket connection
-
-## Supported Methods
-
-1. **initialize**: Initialize the MCP session
-2. **completions**: Get completion suggestions for prompts
-3. **tools/list**: List available tools
-4. **tools/call**: Call a specific tool
-5. **notifications/initialized**: Notification when client is initialized
-6. **notifications/cancelled**: Notification when operation is cancelled
-
-## Dependencies
-
-- Vapor 4.x (Swift server framework)
-- Swift 6.2+
-
-## Building and Running
-
-```bash
-swift build
-swift run
+```swift
+import MCPServer
 ```
 
 ## Testing
 
-The project includes a test suite in the `Tests` directory that can be run with:
+The project includes a comprehensive test suite to ensure reliability and correctness:
+- **MCPServerTests**: Tests for core server functionality.
+- **FileIOTests**: Tests for file operations.
+- **AnyCodableTests**: Tests for type-erased codable types.
+
+Run tests using Swift Package Manager:
 
 ```bash
 swift test
@@ -103,12 +61,4 @@ swift test
 
 ## License
 
-This project is licensed under the terms specified in the LICENSE file.
-
-## Contributing
-
-Contributions are welcome! Please open issues or pull requests for any improvements or bug fixes.
-
-## Contact
-
-For questions or support, please contact the maintainers.
+This project is licensed under the MIT License. See `LICENSE` for more details.
