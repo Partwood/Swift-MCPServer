@@ -117,8 +117,9 @@ class MCPServer {
          
          let app = Application(env)
 
-         app.http.server.configuration.hostname = hostname//"192.168.1.25"
-         app.http.server.configuration.port = port//8000
+         app.http.server.configuration.hostname = hostname
+         app.http.server.configuration.port = port
+         app.routes.defaultMaxBodySize = 10485760 // 10 MB in bytes
          
          let mcpServer = MCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,urlProvider: urlProvider)
          
