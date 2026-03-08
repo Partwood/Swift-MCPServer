@@ -15,4 +15,11 @@ extension Encodable {
       guard let data = try? encoder.encode(self) else { return "" }
       return String(data: data, encoding: .utf8) ?? ""
    }
+   
+   var withoutEscapingSlashesJSONString: String {
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = .withoutEscapingSlashes
+      guard let data = try? encoder.encode(self) else { return "" }
+      return String(data: data, encoding: .utf8) ?? ""
+   }
 }

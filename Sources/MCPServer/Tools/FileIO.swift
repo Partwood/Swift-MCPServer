@@ -241,38 +241,43 @@ extension Tool_FileSystem: MCPTool {
    var name: String { get { return self.tool.name } }
    
    func handleOperation(_ serverInfo: ServerInfo,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      debug("req:\n\(req)\narguments:\n\(arguments)")
+      debug("req:\(req)")
+      //debug("req:\n\(req)\narguments:\n\(arguments)")
       
-      let whichOperation: String = (arguments["operation"] as? String ?? "").lowercased()
-      let operation = FileSystemTool.Input.Operation(rawValue: whichOperation)
+      let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
+      let inPath: String = arguments["path"] as? String ?? "."
+
+      let possibleOperation = FileSystemTool.Input.Operation(rawValue: inOperation)
       
-      let whichPath: String = arguments["path"] as? String ?? "."
-      if ( operation != .none ) {
-         if !accessibleURL(whichPath) {
-            let message = "\(whichPath) is not accessible, path is not a child of \(urlProvider?.url?.path() ?? "")"
-            logError(message)
-            return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-         }
-      } else {
+      guard let operation = possibleOperation else {
          let operations = FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-         let message = "Unknown operation '\(whichOperation)' valid operations are \(operations)"
+         let message = "Unknown operation '\(inOperation)' valid operations are \(operations)"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
-      
+
       guard let url = urlProvider?.url else {
          let message = "Cannot get url"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
+      guard accessibleURL(inPath)  else {
+         let message = "\(inPath) is not accessible, path is not a child of \(urlProvider?.url?.path() ?? "")"
+         logError(message)
+         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+      }
+      
       do {
+         debug("operation:\(operation) path:\(inPath)")
+         
          _ = url.startAccessingSecurityScopedResource()
-         let result = try handleOperation(serverInfo,responseId,arguments,operation!,whichPath)
+         let result = try handleOperation(serverInfo,responseId,arguments,operation,inPath)
          url.stopAccessingSecurityScopedResource()
          return result
       } catch {
          url.stopAccessingSecurityScopedResource()
+         logError(error)
          throw error
       }
    }
