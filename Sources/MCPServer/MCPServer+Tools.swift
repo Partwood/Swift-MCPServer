@@ -27,7 +27,7 @@ extension MCPServer {
       mcpTool = Tool_FileSystem(serverName: self.name,urlProvider: self.urlProvider)
       tools[mcpTool.name] = mcpTool
       
-      mcpTool = Tool_XCode(serverName: self.name,urlProvider: self.urlProvider)
+      mcpTool = Tool_TeamCity(serverName: self.name,urlProvider: self.urlProvider)
       tools[mcpTool.name] = mcpTool
 
       self.tools = tools
