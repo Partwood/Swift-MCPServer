@@ -9,7 +9,7 @@ import Vapor
 
 struct TeamCityTool: Content {
    let name: String
-   static let description = "Perform teamcity rest operations"
+   static let description = "Perform TeamCity rest operations"
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
@@ -29,13 +29,16 @@ struct TeamCityTool: Content {
 
 final
 class Tool_TeamCity {
-   let internalDescriptor: Tool
-   let tool:TeamCityTool
-   let urlProvider: URLProvider?
+   private let internalDescriptor: Tool
+   private let tool:TeamCityTool
+   private var toolAttributes: [String:MCPToolAttribute]
    
-   init(serverName: String,urlProvider: URLProvider?) {
+   init(serverName: String) {
       self.tool = TeamCityTool(serverName: serverName)
-      self.urlProvider = urlProvider
+      self.toolAttributes = [String:MCPToolAttribute]()
+      
+      let accessTokenAttribute = MCPToolAttribute(name: "AccessToken", description: "The authorization bearer token that allows access to TeamCity")
+      self.toolAttributes[accessTokenAttribute.name] = accessTokenAttribute
       
       internalDescriptor =
       Tool(
@@ -52,31 +55,26 @@ class Tool_TeamCity {
                   "type": "string",
                   "description": "Use one of the following values:"+TeamCityTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
                ],
-//               "userName": [
-//                  "type": "string",
-//                  "description": "User name for access.",
-//               ],
-//               "userPassword": [
-//                  "type": "string",
-//                  "description": "User password for access.",
-//               ],
-//               "accessToken": [
-//                  "type": "string",
-//                  "description": "An access token for access.",
-//               ],
             ],
             "required": ["url","operation"]
          ])
       )
    }
-
-   let accessToken = "eyJ0eXAiOiAiVENWMiJ9.R25lMnFyVXJKNkJoeUdiaGIzNjBFWF9WbXZY.YzhiZjVhZWQtMjA1OC00ZDY1LTk1NmUtZGJiMDRjODlmZmFk"
 }
 
 extension Tool_TeamCity: MCPTool {
-   var descriptor: Tool { get { return self.internalDescriptor } }
    var name: String { get { return self.tool.name } }
+   var descriptor: Tool { get { return self.internalDescriptor } }
 
+   var attributes: [MCPToolAttribute] {
+      return toolAttributes.map({ $0.value })
+   }
+   
+   func attributeValue(attribute: MCPToolAttribute, value: String) {
+      debug("attribute:\(attribute.name) value:\(value)")
+      self.toolAttributes[attribute.name]?.value = value
+   }
+   
    func handleOperation(_ serverInfo: ServerInfo, _ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       debug("req:\(req)")
       //debug("req:\n\(req)\narguments:\n\(arguments)")
@@ -87,12 +85,6 @@ extension Tool_TeamCity: MCPTool {
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
-
-//      let inUserName: String = (arguments["userName"] as? String ?? "").lowercased()
-//      let inUserPassword: String = (arguments["userPassword"] as? String ?? "").lowercased()
-//      let inAccessToken: String = (arguments["accessToken"] as? String ?? "").lowercased()
-//      if ( inUrl.isEmpty ) {
-//      }
       
       let whichOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       guard let inOperation = TeamCityTool.Input.Operation(rawValue: whichOperation) else {
@@ -120,7 +112,8 @@ extension Tool_TeamCity {
       let semaphore = DispatchSemaphore(value: 0)
       var httpResponse: HTTP.Response?
       
-      let headers = ["Authorization":"Bearer "+self.accessToken]
+      let token: String = (self.toolAttributes["AccessToken"]?.value ?? "")
+      let headers = ["Authorization":"Bearer "+token]
       HTTP().get(buildURL, headers: headers,callback: { response in
          httpResponse = response
          semaphore.signal()

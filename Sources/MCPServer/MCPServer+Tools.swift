@@ -7,14 +7,7 @@
 
 import Vapor
 
-extension MCPServer {
-   public
-   var readonlyTools: Array<Tool>{
-      get {
-         return self.tools.map({$0.value.descriptor})
-      }
-   }
-   
+extension SwiftMCPServer {
    func registerTools() {
       // Define your available tools
       var tools = [:] as [String: MCPTool]
@@ -27,16 +20,16 @@ extension MCPServer {
       mcpTool = Tool_FileSystem(serverName: self.name,urlProvider: self.urlProvider)
       tools[mcpTool.name] = mcpTool
       
-      mcpTool = Tool_TeamCity(serverName: self.name,urlProvider: self.urlProvider)
+      mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
-      self.tools = tools
+      self.internalTools = tools
    }
    
    func listTools(_ responseId: Int) -> MCPResponse {
       debug("Listing:\n\(self.tools)")
       
-      let descriptorArray: Array<Tool> = self.tools.map({$0.value.descriptor})
+      let descriptorArray: Array<Tool> = self.internalTools.map({$0.value.descriptor})
       let response = MCPResponse(id: String("\(responseId)"),
                   result: [
                      "tools": AnyCodable(descriptorArray)
@@ -58,7 +51,7 @@ extension MCPServer {
          )
       }
       
-      if let first = self.tools[name] {
+      if let first = self.internalTools[name] {
          do {
             let response = try first.handleOperation(self.readableServerInfo,req,"\(responseId)",arguments)
             return response

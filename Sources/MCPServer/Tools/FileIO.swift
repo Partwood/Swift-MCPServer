@@ -237,9 +237,17 @@ class Tool_FileSystem {
 }
 
 extension Tool_FileSystem: MCPTool {
-   var descriptor: Tool { get { return self.internalDescriptor } }
    var name: String { get { return self.tool.name } }
+   var descriptor: Tool { get { return self.internalDescriptor } }
    
+   var attributes: [MCPToolAttribute] {
+      return []
+   }
+   
+   func attributeValue(attribute: MCPToolAttribute, value: String) {
+      // Does nothing
+   }
+
    func handleOperation(_ serverInfo: ServerInfo,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       debug("req:\(req)")
       //debug("req:\n\(req)\narguments:\n\(arguments)")

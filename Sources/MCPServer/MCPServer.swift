@@ -53,41 +53,35 @@ class MCPServerConfiguration {
 }
 
 public
-class MCPServer {
+protocol MCPServer {
+   var name: String { get }
+   var hostname: String { get }
+   var port: Int { get }
+   
+   var mcpTools: Array<MCPTool> { get }
+   var tools: Array<Tool>{ get }
+
+   @MainActor
+   static func startMCP(serverName: String,title: String,hostname: String,port:Int,urlProvider: URLProvider?) throws -> MCPServer
+   @MainActor
+   func stopMCP() throws
+}
+
+public
+class SwiftMCPServer {
    private var app: Application?
    private var requestId = 1
    private var mcpSessionId = 1
    private var loopCount = 0
    private var lastResponseBody: String
    
-   var tools = [String: MCPTool]()
+   var internalTools = [String: MCPTool]()
    
    private var configuration: MCPServerConfiguration
    private var serverInfo: ServerInfo
    
    var urlProvider: URLProvider?
-   
-   public
-   var name: String {
-      get {
-         return configuration.name
-      }
-   }
-   
-   public
-   var hostname: String {
-      get {
-         return configuration.hostname
-      }
-   }
-   
-   public
-   var port: Int {
-      get {
-         return configuration.port
-      }
-   }
-   
+      
    public
    var readableServerInfo: ServerInfo {
       get {
@@ -102,53 +96,6 @@ class MCPServer {
    }
    
    @MainActor static var loggingBootstrapped: Bool = false
-   
-   @MainActor public static
-   func startMCP(serverName: String,title: String,hostname: String,port:Int,urlProvider: URLProvider? = nil) throws -> MCPServer {
-      debug("Starting...")
-      
-      do {
-         var env = try Environment.detect()
-         
-         if ( !loggingBootstrapped ) {
-            loggingBootstrapped = true
-            try LoggingSystem.bootstrap(from: &env)
-         }
-         
-         let app = Application(env)
-
-         app.http.server.configuration.hostname = hostname
-         app.http.server.configuration.port = port
-         app.routes.defaultMaxBodySize = 10485760 // 10 MB in bytes
-         
-         let mcpServer = MCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,urlProvider: urlProvider)
-         
-         if ( urlProvider == nil ) {
-            debug("No urlProvider present (nil)")
-         } else {
-            debug("UrlProvider is present")
-         }
-         
-         Task {
-            do {
-               try await app.execute()
-            } catch {
-               logError(error)
-            }
-         }
-         
-         return mcpServer
-      } catch {
-         logError(error)
-         throw error
-      }
-   }
-   
-   @MainActor public
-   func stopMCP() throws {
-      app?.shutdown()
-      app = nil
-   }
    
    // For testing without network connectivity (internal stuff)
    public
@@ -273,11 +220,93 @@ class MCPServer {
    }
 }
 
+extension SwiftMCPServer: MCPServer {
+   public
+   var name: String {
+      get {
+         return configuration.name
+      }
+   }
+   
+   public
+   var hostname: String {
+      get {
+         return configuration.hostname
+      }
+   }
+   
+   public
+   var port: Int {
+      get {
+         return configuration.port
+      }
+   }
+   
+   public
+   var mcpTools: Array<any MCPTool> {
+      self.internalTools.map({ $0.value })
+   }
+   
+   public
+   var tools: Array<Tool>{
+      get {
+         return self.internalTools.map({$0.value.descriptor})
+      }
+   }
+
+   @MainActor public static
+   func startMCP(serverName: String,title: String,hostname: String,port:Int,urlProvider: URLProvider? = nil) throws -> MCPServer {
+      debug("Starting...")
+      
+      do {
+         var env = try Environment.detect()
+         
+         if ( !loggingBootstrapped ) {
+            loggingBootstrapped = true
+            try LoggingSystem.bootstrap(from: &env)
+         }
+         
+         let app = Application(env)
+         
+         app.http.server.configuration.hostname = hostname
+         app.http.server.configuration.port = port
+         app.routes.defaultMaxBodySize = 10485760 // 10 MB in bytes
+         
+         let mcpServer = SwiftMCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,urlProvider: urlProvider)
+         
+         if ( urlProvider == nil ) {
+            debug("No urlProvider present (nil)")
+         } else {
+            debug("UrlProvider is present")
+         }
+         
+         Task {
+            do {
+               try await app.execute()
+            } catch {
+               logError(error)
+            }
+         }
+         
+         return mcpServer
+      } catch {
+         logError(error)
+         throw error
+      }
+   }
+   
+   @MainActor public
+   func stopMCP() throws {
+      app?.shutdown()
+      app = nil
+   }
+}
+
 enum MCPServerError: Error {
    case sse
 }
 
-extension MCPServer {
+extension SwiftMCPServer {
    func eventStreamMediaType() -> HTTPMediaType {
       return HTTPMediaType(type: "text", subType: "event-stream")
    }

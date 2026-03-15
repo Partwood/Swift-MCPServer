@@ -18,7 +18,7 @@ The core server (`MCPServer.swift`) handles the primary logic for managing conne
 Tools are modular components that perform specific tasks:
 - **FileIO**: Handles file operations such as reading, writing, and directory listing.
 - **Dates**: Provides utilities for date and time manipulations.
-- **XCode**: Interfaces with Xcode command-line tools for project management.
+- **TeamCity**: Interfaces with TeamCity to allow build monitoring and execution.
 
 ### Data Structures
 Custom data structures to support complex data types:
@@ -51,6 +51,7 @@ import MCPServer
 The project includes a comprehensive test suite to ensure reliability and correctness:
 - **MCPServerTests**: Tests for core server functionality.
 - **FileIOTests**: Tests for file operations.
+- **TeamCityTests**: Tests for basic teamcity operation (assuming token access is configured).
 - **AnyCodableTests**: Tests for type-erased codable types.
 
 Run tests using Swift Package Manager:

@@ -55,6 +55,7 @@ struct Tool: Content {
 }
 
 // Define our MCP protocol structures
+public
 struct MCPRequest: Content {
    let id: Int?
    let method: String
@@ -67,6 +68,7 @@ struct MCPRequest: Content {
    }
 }
 
+public
 struct MCPResponse: Content {
    var jsonrpc: String = "2.0"
    let id: String?

@@ -24,7 +24,7 @@ final class TeamCityTests: XCTestCase {
     */
    func testStatus() throws {
       let si = ServerInfo(name: "", title: "", version: "", description: "")
-      let t = Tool_TeamCity(serverName: "name", urlProvider: nil)
+      let t = Tool_TeamCity(serverName: "name")
       let result = t.status(si, "", url: "http://192.168.1.7:8111")
       XCTAssertNil(result.error)
    }
