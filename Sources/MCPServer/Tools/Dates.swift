@@ -77,13 +77,11 @@ extension Tool_SystemDate: MCPTool {
       switch operation {
       case .date:
          return try date(serverInfo,responseId)
-         break
       default:
          let operations = SystemDateTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
          let message = "Unknown operation '\(whichOperation)' valid operations are \(operations)"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-         break
       }
    }
 }

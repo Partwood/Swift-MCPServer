@@ -18,7 +18,8 @@ let package = Package(
     ],
     dependencies: [
       // Dependencies declare other packages that this package depends on.
-      .package(url: "https://github.com/vapor/vapor", .upToNextMajor(from: "4.121.2"))
+      .package(url: "https://github.com/vapor/vapor", .upToNextMajor(from: "4.121.2")),
+      .package(url: "https://github.com/ibrahimcetin/SwiftGitX",.upToNextMajor(from: "0.4.0"))
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -26,7 +27,8 @@ let package = Package(
         .target(
             name: "Swift_MCPServer",
             dependencies: [
-               .product(name: "Vapor", package: "vapor")
+               .product(name: "Vapor", package: "vapor"),
+               .product(name: "SwiftGitX", package: "SwiftGitX")
             ]
         ),
         .testTarget(

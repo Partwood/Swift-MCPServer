@@ -22,12 +22,15 @@ extension SwiftMCPServer {
       
       mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
+      
+      mcpTool = Tool_Git(serverName: self.name,urlProvider: self.urlProvider)
+      tools[mcpTool.name] = mcpTool
 
       self.internalTools = tools
    }
    
    func listTools(_ responseId: Int) -> MCPResponse {
-      debug("Listing:\n\(self.tools)")
+      debug("Listing:\n\(self.tools.map({$0.name}))")
       
       let descriptorArray: Array<Tool> = self.internalTools.map({$0.value.descriptor})
       let response = MCPResponse(id: String("\(responseId)"),

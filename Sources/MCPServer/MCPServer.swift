@@ -402,7 +402,7 @@ extension SwiftMCPServer {
          let buffer = req.application.allocator.buffer(string: value)
          
          // Write data to stream
-         try writer.write(.buffer(buffer))
+         _ = writer.write(.buffer(buffer))
          try? await writer.write(.end).get()
       }
    }

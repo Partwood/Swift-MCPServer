@@ -46,7 +46,7 @@ class Tool_FileSystem {
       self.urlProvider = urlProvider
       
       if let provider = self.urlProvider {
-         debug("Has urlProvider. url:\(provider.url)")
+         debug("Has urlProvider. url:\(provider.url?.path() ?? "nil")")
       } else {
          debug("No urlProvider")
       }
@@ -164,7 +164,7 @@ class Tool_FileSystem {
          // Get contents (files and subfolders)
          let directoryContents = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
          
-         let _ = try directoryContents.map { file in
+         let _ = directoryContents.map { file in
             if ( file.lastPathComponent.hasPrefix(".") ) {
                // Ignore any fie that starts with .
                return
@@ -181,9 +181,9 @@ class Tool_FileSystem {
                let isDirectory = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
                if ( isDirectory ) {
                   if let fileType = attributes[FileAttributeKey.type] as? String,
-                     let creationDate = attributes[FileAttributeKey.creationDate] as? Date,
+                     let _ = attributes[FileAttributeKey.creationDate] as? Date,
                      let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-                     let permissions = attributes[FileAttributeKey.posixPermissions] as? Int {
+                     let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
                      
                      fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)' is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
                   } else {
@@ -193,9 +193,9 @@ class Tool_FileSystem {
                } else {
                   if let fileSize = attributes[FileAttributeKey.size] as? Int64,
                      let fileType = attributes[FileAttributeKey.type] as? String,
-                     let creationDate = attributes[FileAttributeKey.creationDate] as? Date,
+                     let _ = attributes[FileAttributeKey.creationDate] as? Date,
                      let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-                     let permissions = attributes[FileAttributeKey.posixPermissions] as? Int {
+                     let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
                      
                      fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
                   } else {
@@ -276,33 +276,23 @@ extension Tool_FileSystem: MCPTool {
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
-      do {
-         debug("operation:\(operation) path:\(inPath)")
-         
-         _ = url.startAccessingSecurityScopedResource()
-         let result = try handleOperation(serverInfo,responseId,arguments,operation,inPath)
-         url.stopAccessingSecurityScopedResource()
-         return result
-      } catch {
-         url.stopAccessingSecurityScopedResource()
-         logError(error)
-         throw error
-      }
+      debug("operation:\(operation) path:\(inPath)")
+      
+      _ = url.startAccessingSecurityScopedResource()
+      let result = handleOperation(serverInfo,responseId,arguments,operation,inPath)
+      url.stopAccessingSecurityScopedResource()
+      return result
    }
    
    private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileSystemTool.Input.Operation,_ whichPath: String) -> MCPResponse {
       switch operation {
       case .listDirectory:
          return listDirectory(serverInfo,responseId,at: whichPath)
-         break
       case .writeFile:
          let whichContent: String = arguments["content"] as? String ?? ""
          return writeFile(serverInfo,responseId,at: whichPath,with: whichContent)
-         break
       case .createDirectory:
-         let whichContent: String = arguments["content"] as? String ?? ""
          return createDir(serverInfo,responseId,at: whichPath)
-         break
 //      default:
 //         let operations = FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
 //         let message = "Unknown operation '\(whichOperation)' valid operations are \(operations)"
@@ -311,7 +301,6 @@ extension Tool_FileSystem: MCPTool {
 //         break
       case .readFile:
          return readFile(serverInfo,responseId,at: whichPath)
-         break
       }
    }
 }

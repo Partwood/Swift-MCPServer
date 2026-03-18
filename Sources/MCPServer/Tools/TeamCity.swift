@@ -97,7 +97,6 @@ extension Tool_TeamCity: MCPTool {
       switch inOperation {
       case .status:
          return status(serverInfo, responseId, url: inUrl)
-         break
       }
    }
 }

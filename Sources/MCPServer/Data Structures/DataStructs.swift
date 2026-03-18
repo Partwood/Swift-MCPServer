@@ -68,6 +68,11 @@ struct MCPRequest: Content {
    }
 }
 
+struct Configuration {
+   let response_id: String
+   let serverInfo: ServerInfo
+}
+
 public
 struct MCPResponse: Content {
    var jsonrpc: String = "2.0"
@@ -93,6 +98,10 @@ struct MCPResponse: Content {
                   error: mcpError)
    }
    
+   static func toolError(_ configuration: Configuration,message: String) -> MCPResponse {
+      return MCPResponse.toolError(id: configuration.response_id,message: message,serverInfo: configuration.serverInfo)
+   }
+   
    static func toolError(id: String,message: String,serverInfo: ServerInfo) -> MCPResponse {
       let body = Text_Content(type: "text", text: message)
       
@@ -103,10 +112,18 @@ struct MCPResponse: Content {
       return MCPResponse.success(id: id, result: content,serverInfo: serverInfo)
    }
 
+   static func toolSuccess(_ configuration: Configuration,text value: String) -> MCPResponse {
+      return MCPResponse.toolSuccess(id: configuration.response_id, content: [Text_Content(text: value)],serverInfo: configuration.serverInfo)
+   }
+
    static func toolSuccess(id: String,text value: String,serverInfo: ServerInfo) -> MCPResponse {
       return MCPResponse.toolSuccess(id: id, content: [Text_Content(text: value)],serverInfo: serverInfo)
    }
 
+   static func toolSuccess(_ configuration: Configuration,content values:Array<Text_Content>) -> MCPResponse {
+      return MCPResponse.toolSuccess(id: configuration.response_id, content: values, serverInfo: configuration.serverInfo)
+   }
+   
    static func toolSuccess(id: String,content values:Array<Text_Content>,serverInfo: ServerInfo) -> MCPResponse {
       var content = [String:AnyCodable]()
       content["content"] = AnyCodable(values)
