@@ -18,16 +18,17 @@ struct FileSystemTool: Content {
          case listDirectory = "list"
          case readFile = "read"
          case writeFile = "write"
+         case insertFile = "insert"
          case createDirectory = "createdirectory"
 //         case deleteFile
 //         case moveFile
 //         case copyFile
       }
       
-      let operation: Operation
-      let path: String
-      let content: String? // For write operations
-      let newPath: String? // For move/copy operations
+      //let operation: Operation
+      //let path: String
+      //let content: String? // For write operations
+      //let newPath: String? // For move/copy operations
    }
    
    init(serverName: String) {
@@ -68,8 +69,12 @@ class Tool_FileSystem {
                ],
                "content": [
                   "type": "string",
-                  "description": "The content of a file"
+                  "description": "The content of a file to be either written entirely or inserted"
                ],
+               "offset": [
+                  "type": "number",
+                  "description": "When inserting content into a file the location (as an integer) to start the insertion"
+               ]
                //               "destination": [
                //                  "type": "string",
                //                  "description": "The destination location on disk if the operation is move or copy"
@@ -234,6 +239,52 @@ class Tool_FileSystem {
       let desiredURL = URL(fileURLWithPath: expandedPath)
       return desiredURL.isContained(in: url)
    }
+   
+   func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,fileURL: URL, atOffset offset: UInt64, newData: Data) -> MCPResponse {
+      let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+      
+      do {
+         let originalHandle = try FileHandle(forReadingFrom: fileURL)
+         let tempHandle = try FileHandle(forWritingTo: tempFileURL)
+         defer {
+            try? originalHandle.close()
+            try? tempHandle.close()
+         }
+         
+         // 1. Read up to the offset
+         try originalHandle.seek(toOffset: 0)
+         if let dataBeforeOffset = try originalHandle.read(upToCount: Int(offset)) {
+            // 2. Write to temp file
+            try tempHandle.write(contentsOf: dataBeforeOffset)
+         }
+         
+         // 3. Write new data
+         try tempHandle.write(contentsOf: newData)
+         
+         // 4. Read the rest of original and append
+         // Seek to the insertion point in the original file again to ensure we get the rest
+         try originalHandle.seek(toOffset: offset)
+         let dataAfterOffset = try originalHandle.readToEnd()
+         
+         if let dataAfterOffset = dataAfterOffset {
+            try tempHandle.write(contentsOf: dataAfterOffset)
+         }
+         
+         // 5. Replace original file
+         try FileManager.default.removeItem(at: fileURL)
+         try FileManager.default.moveItem(at: tempFileURL, to: fileURL)
+         debug("Data inserted successfully at offset \(offset).")
+         
+      } catch {
+         let message = "Error inserting data into file '\(fileURL.path())', error: \(error.localizedDescription)"
+         logError(message)
+         // Clean up temp file on error
+         try? FileManager.default.removeItem(at: tempFileURL)
+         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+      }
+   
+      return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path())'" ,serverInfo: serverInfo)
+   }
 }
 
 extension Tool_FileSystem: MCPTool {
@@ -249,7 +300,7 @@ extension Tool_FileSystem: MCPTool {
    }
 
    func handleOperation(_ serverInfo: ServerInfo,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      debug("req:\(req)")
+      debug("req:\(req.method)")
       //debug("req:\n\(req)\narguments:\n\(arguments)")
       
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
@@ -291,6 +342,19 @@ extension Tool_FileSystem: MCPTool {
       case .writeFile:
          let whichContent: String = arguments["content"] as? String ?? ""
          return writeFile(serverInfo,responseId,at: whichPath,with: whichContent)
+      case .insertFile:
+         let fileURL:URL = URL(fileURLWithPath: whichPath)
+
+         guard let whichOffset: UInt64 = UInt64(arguments["offset"] as? String ?? "0") else {
+            return MCPResponse.toolError(id: responseId, message: "Offset not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         }
+
+         guard let whichContent: String = arguments["content"] as? String,
+               let data = whichContent.data(using: .utf8) else {
+            return MCPResponse.toolError(id: responseId, message: "Content not provided or unable to convert the provided content into UTF8 Data",serverInfo: serverInfo)
+         }
+         
+         return insertDataIntoFile(serverInfo,responseId,fileURL: fileURL,atOffset: whichOffset,newData: data)
       case .createDirectory:
          return createDir(serverInfo,responseId,at: whichPath)
 //      default:
