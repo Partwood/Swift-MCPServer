@@ -20,6 +20,7 @@ struct FileSystemTool: Content {
          case writeFile = "write"
          case insertFile = "insert"
          case createDirectory = "createdirectory"
+         case appendFile = "append"
 //         case deleteFile
 //         case moveFile
 //         case copyFile
@@ -285,6 +286,31 @@ class Tool_FileSystem {
    
       return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path())'" ,serverInfo: serverInfo)
    }
+
+   func appendToFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,with content: String) -> MCPResponse {
+      // Convert the tilde path (~/) to an absolute path
+      let expandedPath = NSString(string: path).expandingTildeInPath
+      
+      do {
+         // Read existing content if file exists
+         var existingContent = ""
+         if FileManager.default.fileExists(atPath: expandedPath) {
+            existingContent = try String(contentsOfFile: expandedPath, encoding: .utf8)
+         }
+         
+         // Append new content
+         let newContent = existingContent + content
+         
+         // Write the combined content back to file
+         try newContent.write(toFile: expandedPath, atomically: true, encoding: .utf8)
+      } catch {
+         let message = "Error appending to file, \(error.localizedDescription)"
+         logError(message)
+         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
+      }
+      
+      return MCPResponse.toolSuccess(id: responseId, text: "Successfully appended the content to \(path)",serverInfo: serverInfo)
+   }
 }
 
 extension Tool_FileSystem: MCPTool {
@@ -365,6 +391,12 @@ extension Tool_FileSystem: MCPTool {
 //         break
       case .readFile:
          return readFile(serverInfo,responseId,at: whichPath)
+      case .appendFile:
+         let whichContent: String = arguments["content"] as? String ?? ""
+         guard !whichContent.isEmpty else {
+            return MCPResponse.toolError(id: responseId, message: "Content not provided for append operation",serverInfo: serverInfo)
+         }
+         return appendToFile(serverInfo,responseId,at: whichPath,with: whichContent)
       }
    }
 }
