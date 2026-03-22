@@ -172,6 +172,35 @@ struct MCPResponse: Content {
          return nil
       }
    }
+   
+   var isToolError: Bool {
+      if let result = self.result,
+         let mappedValues = result.value as? [String: AnyCodable] {
+         if let isError: AnyCodable = mappedValues["isError"],
+            let value: Bool = isError.value as? Bool {
+            return value
+         } else {
+            return false
+         }
+      } else {
+         return false
+      }
+   }
+   
+   var toolContent: String? {
+      if let result = self.result,
+         let mappedValues = result.value as? [String: AnyCodable] {
+         if let contentValue: AnyCodable = mappedValues["content"] {
+            if let textContent = contentValue.value as? [Text_Content] {
+               return textContent.map({ $0.text }).joined(separator: ", ")
+            } else if let textContent = contentValue.value as? Text_Content {
+               return textContent.text
+            }
+         }
+      }
+      
+      return nil
+   }
 }
 
 struct MCPError: Content {

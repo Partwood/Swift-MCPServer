@@ -21,12 +21,12 @@ final class MCPServerToolsTest: XCTestCase {
     func testToolList() throws {
        let server = SwiftMCPServer()
        let response: MCPResponse = server.listTools(1)
-       debug("response:\(response.prettyPrintedJSONString)")
-       let stringValue = response.prettyPrintedJSONString
+       debug("response:\(try response.prettyPrintedJSONString)")
+       let stringValue = try response.prettyPrintedJSONString
        if let dataValue: Data = stringValue.data(using: .utf8) {
           let decoder = JSONDecoder()
           let converted:MCPResponse = try decoder.decode(MCPResponse.self,from: dataValue)
-          debug("converted:\(converted.prettyPrintedJSONString)")
+          debug("converted:\(try converted.prettyPrintedJSONString)")
 
           if let resultMap = response.result?.value as? [String:Any] {
              if let convertedMap = converted.result?.value as? [String:Any] {

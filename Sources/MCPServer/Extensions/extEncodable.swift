@@ -10,16 +10,20 @@ import Foundation
 extension Encodable {
    /// A pretty printed JSON string representation of the object.
    var prettyPrintedJSONString: String {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = .prettyPrinted
-      guard let data = try? encoder.encode(self) else { return "" }
-      return String(data: data, encoding: .utf8) ?? ""
+      get throws {
+         let encoder = JSONEncoder()
+         encoder.outputFormatting = .prettyPrinted
+         let data = try encoder.encode(self)
+         return String(data: data, encoding: .utf8) ?? ""
+      }
    }
    
    var withoutEscapingSlashesJSONString: String {
-      let encoder = JSONEncoder()
-      encoder.outputFormatting = .withoutEscapingSlashes
-      guard let data = try? encoder.encode(self) else { return "" }
-      return String(data: data, encoding: .utf8) ?? ""
+      get throws {
+         let encoder = JSONEncoder()
+         encoder.outputFormatting = .withoutEscapingSlashes
+         let data = try encoder.encode(self)
+         return String(data: data, encoding: .utf8) ?? ""
+      }
    }
 }

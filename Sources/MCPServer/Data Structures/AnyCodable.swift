@@ -64,7 +64,7 @@ struct AnyCodable: Codable, @unchecked Sendable {
                try container.encode(encodable)
                return
             } else {
-               logError("object in value is not Encodable")
+               logError("object in value is not Encodable value:\(value)")
             }
          } catch {
             logError(error)
