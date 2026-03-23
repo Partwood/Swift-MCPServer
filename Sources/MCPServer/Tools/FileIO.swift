@@ -11,7 +11,7 @@ import Vapor
 
 struct FileSystemTool: Content {
    let name: String
-   static let description = "Perform file system operations"
+   static let description = "Perform file system operations like reading and writing files, creating directories, listing directory contents, inserting and appending to files and finding a file or directory under a path."
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
@@ -21,6 +21,7 @@ struct FileSystemTool: Content {
          case insertFile = "insert"
          case createDirectory = "createdirectory"
          case appendFile = "append"
+         case findFile = "find"
 //         case deleteFile
 //         case moveFile
 //         case copyFile
@@ -75,7 +76,11 @@ class Tool_FileSystem {
                "offset": [
                   "type": "number",
                   "description": "When inserting content into a file the location (as an integer) to start the insertion"
-               ]
+               ],
+               "fileName": [
+                  "type": "string",
+                  "description": "The file or directory name to find within the path provided"
+               ],
                //               "destination": [
                //                  "type": "string",
                //                  "description": "The destination location on disk if the operation is move or copy"
@@ -84,6 +89,23 @@ class Tool_FileSystem {
             "required": ["operation", "path"]
          ])
       )
+   }
+   
+   func accessibleURL(_ path: String) -> Bool {
+      guard let urlProvider = self.urlProvider else {
+         debug("No urlProvider")
+         return false
+      }
+      guard let url = urlProvider.url else {
+         debug("No urlProvider.url")
+         return false
+      }
+      
+      debug("url:\(url.path())\npath:\(path)")
+      
+      let expandedPath = NSString(string: path).expandingTildeInPath
+      let desiredURL = URL(fileURLWithPath: expandedPath)
+      return desiredURL.isContained(in: url)
    }
    
    func createDir(_ serverInfo: ServerInfo,_ responseId: String,at path: String) -> MCPResponse {
@@ -104,27 +126,6 @@ class Tool_FileSystem {
       }
       
       return MCPResponse.toolSuccess(id: responseId, text: "Successfully created directory \(path)",serverInfo: serverInfo)
-   }
-   
-   func writeFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,with content: String) -> MCPResponse {
-      // Convert the tilde path (~/) to an absolute path
-      let expandedPath = NSString(string: path).expandingTildeInPath
-      
-      do {
-         // Create the directory if it doesn't exist
-         let directoryURL = URL(fileURLWithPath: (expandedPath as NSString).deletingLastPathComponent)
-         try FileManager.default.createDirectory(at: directoryURL,
-                                                 withIntermediateDirectories: true)
-         
-         // Write the content to file
-         try content.write(toFile: expandedPath, atomically: true, encoding: .utf8)
-      } catch {
-         let message = "Error writing to file, \(error.localizedDescription)"
-         logError(message)
-         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully wrote the content to \(path)",serverInfo: serverInfo)
    }
    
    private func readFileToString(atPath path: String) -> String? {
@@ -223,24 +224,31 @@ class Tool_FileSystem {
       
       return MCPResponse.toolSuccess(id: responseId, content: files,serverInfo: serverInfo)
    }
+}
 
-   func accessibleURL(_ path: String) -> Bool {
-      guard let urlProvider = self.urlProvider else {
-         debug("No urlProvider")
-         return false
-      }
-      guard let url = urlProvider.url else {
-         debug("No urlProvider.url")
-         return false
-      }
-
-      debug("url:\(url.path())\npath:\(path)")
-      
+// File content changes
+extension Tool_FileSystem {
+   func writeFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,with content: String) -> MCPResponse {
+      // Convert the tilde path (~/) to an absolute path
       let expandedPath = NSString(string: path).expandingTildeInPath
-      let desiredURL = URL(fileURLWithPath: expandedPath)
-      return desiredURL.isContained(in: url)
+      
+      do {
+         // Create the directory if it doesn't exist
+         let directoryURL = URL(fileURLWithPath: (expandedPath as NSString).deletingLastPathComponent)
+         try FileManager.default.createDirectory(at: directoryURL,
+                                                 withIntermediateDirectories: true)
+         
+         // Write the content to file
+         try content.write(toFile: expandedPath, atomically: true, encoding: .utf8)
+      } catch {
+         let message = "Error writing to file, \(error.localizedDescription)"
+         logError(message)
+         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
+      }
+      
+      return MCPResponse.toolSuccess(id: responseId, text: "Successfully wrote the content to \(path)",serverInfo: serverInfo)
    }
-   
+
    func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,fileURL: URL, atOffset offset: UInt64, newData: Data) -> MCPResponse {
       let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
       
@@ -283,10 +291,10 @@ class Tool_FileSystem {
          try? FileManager.default.removeItem(at: tempFileURL)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
-   
+      
       return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path())'" ,serverInfo: serverInfo)
    }
-
+   
    func appendToFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,with content: String) -> MCPResponse {
       // Convert the tilde path (~/) to an absolute path
       let expandedPath = NSString(string: path).expandingTildeInPath
@@ -310,6 +318,70 @@ class Tool_FileSystem {
       }
       
       return MCPResponse.toolSuccess(id: responseId, text: "Successfully appended the content to \(path)",serverInfo: serverInfo)
+   }
+}
+
+// Find
+extension Tool_FileSystem {
+   func findFile(_ serverInfo: ServerInfo,_ responseId: String,in rootPath: String, named fileName: String) -> MCPResponse {
+      let expandedRootPath = NSString(string: rootPath).expandingTildeInPath
+      let fileManager = FileManager.default
+      var foundFiles = [Text_Content]()
+      
+      do {
+         // Get the contents of the root directory
+         let rootURL = URL(fileURLWithPath: expandedRootPath)
+         let contents = try fileManager.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: nil)
+         
+         for item in contents {
+            if item.lastPathComponent == fileName {
+               // Found the file/directory directly in the root
+               foundFiles.append(Text_Content(text: "Found '" + fileName + "' at path: " + item.path))
+            } else if let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory, isDirectory {
+               // Recursively search in subdirectories
+               let foundInSubdirs = try findFile(in: item.path, named: fileName)
+               for foundItem in foundInSubdirs {
+                  foundFiles.append(foundItem)
+               }
+            }
+         }
+      } catch {
+         let message = "Error searching for file: \(error.localizedDescription)"
+         logError(message)
+         return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
+      }
+      
+      if foundFiles.isEmpty {
+         return MCPResponse.toolSuccess(id: responseId, text: "No file or directory named '" + fileName + "' found in '" + rootPath + "'", serverInfo: serverInfo)
+      } else {
+         return MCPResponse.toolSuccess(id: responseId, content: foundFiles, serverInfo: serverInfo)
+      }
+   }
+
+   private func findFile(in directoryPath: String, named fileName: String) throws -> [Text_Content] {
+      let fileManager = FileManager.default
+      var foundItems = [Text_Content]()
+      
+      do {
+         let directoryURL = URL(fileURLWithPath: directoryPath)
+         let contents = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
+         
+         for item in contents {
+            if item.lastPathComponent == fileName {
+               foundItems.append(Text_Content(text: "Found '" + fileName + "' at path: " + item.path))
+            } else if let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory, isDirectory {
+               // Recursively search in subdirectories
+               let foundInSubdirs = try findFile(in: item.path, named: fileName)
+               for foundItem in foundInSubdirs {
+                  foundItems.append(foundItem)
+               }
+            }
+         }
+      } catch {
+         throw error
+      }
+      
+      return foundItems
    }
 }
 
@@ -383,12 +455,6 @@ extension Tool_FileSystem: MCPTool {
          return insertDataIntoFile(serverInfo,responseId,fileURL: fileURL,atOffset: whichOffset,newData: data)
       case .createDirectory:
          return createDir(serverInfo,responseId,at: whichPath)
-//      default:
-//         let operations = FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-//         let message = "Unknown operation '\(whichOperation)' valid operations are \(operations)"
-//         logError(message)
-//         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-//         break
       case .readFile:
          return readFile(serverInfo,responseId,at: whichPath)
       case .appendFile:
@@ -397,6 +463,12 @@ extension Tool_FileSystem: MCPTool {
             return MCPResponse.toolError(id: responseId, message: "Content not provided for append operation",serverInfo: serverInfo)
          }
          return appendToFile(serverInfo,responseId,at: whichPath,with: whichContent)
+      case .findFile:
+         let fileName = arguments["fileName"] as? String ?? ""
+         guard !fileName.isEmpty else {
+            return MCPResponse.toolError(id: responseId, message: "Filename not provided for find operation", serverInfo: serverInfo)
+         }
+         return findFile(serverInfo, responseId, in: whichPath, named: fileName)
       }
    }
 }
