@@ -308,8 +308,10 @@ extension SwiftMCPServer: MCPServer {
    
    @MainActor public
    func stopMCP() throws {
-      app?.shutdown()
-      app = nil
+      Task {
+         try await app?.asyncShutdown()
+         app = nil
+      }
    }
 }
 

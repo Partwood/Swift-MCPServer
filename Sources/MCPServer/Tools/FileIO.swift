@@ -265,6 +265,10 @@ extension Tool_FileSystem {
       let fileURL = fileURL(path: inPath,name)
       
       do {
+         if !FileManager.default.fileExists(atPath: tempFileURL.path()) {
+            FileManager.default.createFile(atPath: tempFileURL.path(), contents: nil)
+         }
+         
          let originalHandle = try FileHandle(forReadingFrom: fileURL)
          let tempHandle = try FileHandle(forWritingTo: tempFileURL)
          defer {
