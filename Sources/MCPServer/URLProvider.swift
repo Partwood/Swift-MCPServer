@@ -9,5 +9,6 @@ import Foundation
 
 public
 protocol URLProvider {
+   var provider: UUID { get }
    var url: URL? { get }
 }

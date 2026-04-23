@@ -75,7 +75,7 @@ extension Tool_TeamCity: MCPTool {
       self.toolAttributes[attribute.name]?.value = value
    }
    
-   func handleOperation(_ serverInfo: ServerInfo, _ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?, _ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       debug("req:\(req)")
       //debug("req:\n\(req)\narguments:\n\(arguments)")
       

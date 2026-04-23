@@ -26,5 +26,5 @@ protocol MCPTool {
    
    func attributeValue(attribute: MCPToolAttribute,value: String)
    
-   func handleOperation(_ serverInfo: ServerInfo,_ req: MCPRequest,_ responseId: String,_ arguments: [String: Any]) throws -> MCPResponse
+   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest,_ responseId: String,_ arguments: [String: Any]) throws -> MCPResponse
 }

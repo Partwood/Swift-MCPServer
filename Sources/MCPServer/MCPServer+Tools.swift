@@ -17,13 +17,13 @@ extension SwiftMCPServer {
       mcpTool = Tool_SystemDate(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       
-      mcpTool = Tool_FileSystem(serverName: self.name,urlProvider: self.urlProvider)
+      mcpTool = Tool_FileSystem(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       
       mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       
-      mcpTool = Tool_Git(serverName: self.name,urlProvider: self.urlProvider)
+      mcpTool = Tool_Git(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
       self.internalTools = tools
@@ -42,7 +42,7 @@ extension SwiftMCPServer {
       return response
    }
    
-   func callTool(_ req: MCPRequest,_ responseId: Int,params: [String: AnyCodable]?) -> MCPResponse {
+   func callTool(_ urlProvider: URLProvider?,_ req: MCPRequest,_ responseId: Int,params: [String: AnyCodable]?) -> MCPResponse {
       guard let params = params,
             let name = params["name"]?.value as? String,
             let arguments = params["arguments"]?.value as? [String: Any] else {
@@ -56,7 +56,7 @@ extension SwiftMCPServer {
       
       if let first = self.internalTools[name] {
          do {
-            let response = try first.handleOperation(self.readableServerInfo,req,"\(responseId)",arguments)
+            let response = try first.handleOperation(self.readableServerInfo,urlProvider,req,"\(responseId)",arguments)
             return response
          } catch {
             logError(error)

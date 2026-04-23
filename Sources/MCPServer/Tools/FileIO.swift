@@ -53,17 +53,9 @@ final
 class Tool_FileSystem {
    let internalDescriptor: Tool
    let tool: FileSystemTool
-   let urlProvider: URLProvider?
    
-   init(serverName: String,urlProvider: URLProvider?) {
+   init(serverName: String) {
       self.tool = FileSystemTool(serverName: serverName)
-      self.urlProvider = urlProvider
-      
-      if let provider = self.urlProvider {
-         debug("Has urlProvider. url:\(provider.url?.path() ?? "nil")")
-      } else {
-         debug("No urlProvider")
-      }
       
       internalDescriptor =
       Tool(
@@ -102,8 +94,8 @@ class Tool_FileSystem {
       )
    }
    
-   func accessibleURL(_ path: String) -> Bool {
-      guard let urlProvider = self.urlProvider else {
+   func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> Bool {
+      guard let urlProvider else {
          debug("No urlProvider")
          return false
       }
@@ -426,7 +418,7 @@ extension Tool_FileSystem: MCPTool {
       // Does nothing
    }
 
-   func handleOperation(_ serverInfo: ServerInfo,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       debug("req:\(req.method)")
       //debug("req:\n\(req)\narguments:\n\(arguments)")
       
@@ -448,7 +440,7 @@ extension Tool_FileSystem: MCPTool {
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
-      guard accessibleURL(inPath)  else {
+      guard accessibleURL(urlProvider,inPath)  else {
          let message = "\(inPath) is not accessible, path is not a child of \(urlProvider?.url?.path() ?? "")"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)

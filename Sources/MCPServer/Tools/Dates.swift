@@ -69,7 +69,7 @@ extension Tool_SystemDate: MCPTool {
       // Does nothing
    }
 
-   func handleOperation(_ serverInfo: ServerInfo,_ req: MCPRequest,_ responseId: String,_ arguments: [String: Any]) throws -> MCPResponse {
+   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest,_ responseId: String,_ arguments: [String: Any]) throws -> MCPResponse {
       debug("req:\n\(req)\narguments:\n\(arguments)")
       
       let whichOperation: String = (arguments["operation"] as? String ?? "").lowercased()

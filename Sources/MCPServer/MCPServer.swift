@@ -62,9 +62,8 @@ protocol MCPServer {
    var tools: Array<Tool>{ get }
 
    @MainActor
-   //static func startMCP(serverName: String,title: String,hostname: String,port:Int,urlProvider: URLProvider?) throws -> MCPServer
    static func startMCP(serverName: String,title: String,hostname: String,port:Int,
-                        urlProvider: URLProvider?,
+                        resourceProvider: ResourceProvider?,
                         callback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void))
    @MainActor
    func stopMCP() throws
@@ -83,7 +82,7 @@ class SwiftMCPServer {
    private var configuration: MCPServerConfiguration
    private var serverInfo: ServerInfo
    
-   var urlProvider: URLProvider?
+   var resourceProvider: ResourceProvider?
       
    public
    var readableServerInfo: ServerInfo {
@@ -114,12 +113,12 @@ class SwiftMCPServer {
    }
    
    public
-   init(app: Application,name: String,title: String, hostname: String, port: Int,urlProvider: URLProvider?) {
+   init(app: Application,name: String,title: String, hostname: String, port: Int,resourceProvider: ResourceProvider?) {
       self.app = app
       self.lastResponseBody = ""
       self.configuration = MCPServerConfiguration(name: name, hostname: hostname, port: port)
       self.serverInfo = ServerInfo(name: name,title: title, version: "1.0.0", description: "An example MCP server providing tools and resources")
-      self.urlProvider = urlProvider
+      self.resourceProvider = resourceProvider
 
       configureRoutes()
       registerTools()
@@ -128,13 +127,13 @@ class SwiftMCPServer {
       app.middleware.use(NotFoundTrackerMiddleware())
    }
       
-   private func handleRequest(_ request: MCPRequest, on eventLoop: EventLoop) -> EventLoopFuture<MCPResponse> {
+   private func handleRequest(_ urlProvider: URLProvider?,_ request: MCPRequest, on eventLoop: EventLoop) -> EventLoopFuture<MCPResponse> {
       return eventLoop.makeSucceededFuture(
-         handleRequest(request)
+         handleRequest(urlProvider, request)
       )
    }
    
-   private func handleRequest(_ request: MCPRequest) -> MCPResponse {
+   private func handleRequest(_ urlProvider: URLProvider?,_ request: MCPRequest) -> MCPResponse {
       if let request_id = request.id {
          if ( request_id == 0 ) {
             self.requestId += 1
@@ -154,7 +153,7 @@ class SwiftMCPServer {
       case "tools/list":
          return listTools(responseId)
       case "tools/call":
-         return callTool(request, responseId,params: request.params)
+         return callTool(urlProvider, request, responseId,params: request.params)
       default:
          logError("Not found! request.method:\(request.method)")
          return MCPResponse(id: String("\(responseId)"),
@@ -259,14 +258,14 @@ extension SwiftMCPServer: MCPServer {
 
    @MainActor public static
    func startMCP(serverName: String,title: String,hostname: String,port:Int,
-                 urlProvider: URLProvider? = nil,
+                 resourceProvider: ResourceProvider? = nil,
                  callback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void)) {
       debug("Starting...")
       
-      if ( urlProvider == nil ) {
-         debug("No urlProvider present (nil)")
+      if ( resourceProvider == nil ) {
+         debug("No ResourceProvider present (nil)")
       } else {
-         debug("UrlProvider is present")
+         debug("ResourceProvider is present")
       }
       
       var env: Environment
@@ -291,7 +290,7 @@ extension SwiftMCPServer: MCPServer {
             app.http.server.configuration.port = port
             app.routes.defaultMaxBodySize = 10485760 // 10 MB in bytes
             
-            let mcpServer = SwiftMCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,urlProvider: urlProvider)
+            let mcpServer = SwiftMCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,resourceProvider: resourceProvider)
             callback(mcpServer,nil)
 
             do {
@@ -394,11 +393,29 @@ extension SwiftMCPServer {
       }
       
       app?.on(.OPTIONS, "mcp") { req -> Response in
-         let headers = HTTPHeaders([
-            ("Access-Control-Allow-Origin", "*"),
-            ("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"),
-            ("Access-Control-Allow-Headers", "Content-Type,Authorization,mcp-protocol-version,mcp-session-id,Accept,Last-Event-ID")
-         ])
+         let headers: HTTPHeaders
+         
+         if let resourceProvider = self.resourceProvider {
+            var allowedHeaders: Array<String> = ["Content-Type","Authorization","mcp-protocol-version","mcp-session-id","Accept","Last-Event-ID"]
+            
+            resourceProvider.allowedHeaders().forEach({ allowedHeader in
+               allowedHeaders.append(allowedHeader)
+            })
+            
+            let headerStrings: String = allowedHeaders.joined(separator: ",")
+            
+            headers = HTTPHeaders([
+               ("Access-Control-Allow-Origin", "*"),
+               ("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"),
+               ("Access-Control-Allow-Headers", headerStrings)
+            ])
+         } else {
+            headers = HTTPHeaders([
+               ("Access-Control-Allow-Origin", "*"),
+               ("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"),
+               ("Access-Control-Allow-Headers", "Content-Type,Authorization,mcp-protocol-version,mcp-session-id,Accept,Last-Event-ID")
+            ])
+         }
          
          debug("Options were requested headers:\n\(headers)")
          
@@ -420,14 +437,30 @@ extension SwiftMCPServer {
       }
    }
 
+   private func getURLProvider(_ req: Request) -> URLProvider? {
+      let urlProvider: URLProvider?
+      
+      if let resourceProvider = self.resourceProvider {
+         var sharedHeaders = [String:String]()
+         req.headers.forEach({ pair in
+            sharedHeaders[pair.name] = pair.value
+         })
+         urlProvider = resourceProvider.urlProvider(sharedHeaders)
+      } else {
+         urlProvider = nil
+      }
+      
+      return urlProvider
+   }
+   
    func get(_ req: Request) throws -> EventLoopFuture<Response> {
       let request = try req.content.decode(MCPRequest.self)
       if (request.method == "notifications/initialized" || request.method == "notifications/cancelled"){
          debug(request.method)
          return req.eventLoop.makeSucceededFuture(Response(status: .noContent))
       }
-      
-      let futureMCPResponse = self.handleRequest(request, on: req.eventLoop)
+
+      let futureMCPResponse = self.handleRequest(getURLProvider(req),request, on: req.eventLoop)
       let mcpResponse = try futureMCPResponse.wait()
       
       let mcp_session_id = self.mcpSessionId
@@ -464,7 +497,7 @@ extension SwiftMCPServer {
                                                            headers: headers))
       }
       
-      let mcpResponse: MCPResponse = self.handleRequest(request)
+      let mcpResponse: MCPResponse = self.handleRequest(getURLProvider(req),request)
             
       let responseBody: String = (mcpResponse.encodeForSSE() ?? "{}")
       self.lastResponseBody = responseBody

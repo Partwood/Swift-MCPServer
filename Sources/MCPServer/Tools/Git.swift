@@ -49,11 +49,9 @@ public
 class Tool_Git {
    let internalDescriptor: Tool
    let tool: GitTool
-   let urlProvider: URLProvider?
    
-   init(serverName: String,urlProvider: URLProvider?) {
+   init(serverName: String) {
       self.tool = GitTool(serverName: serverName)
-      self.urlProvider = urlProvider
       
       self.internalDescriptor =
       Tool(
@@ -292,7 +290,7 @@ extension Tool_Git: MCPTool {
       // Do nothing
    }
    
-   public func handleOperation(_ serverInfo: ServerInfo, _ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       let argOperation: String = arguments["operation"] as? String ?? ""
       let possibleOperation = GitTool.Input.Operation(rawValue: argOperation)
 
