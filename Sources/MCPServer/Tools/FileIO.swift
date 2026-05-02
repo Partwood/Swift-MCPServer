@@ -94,21 +94,26 @@ class Tool_FileSystem {
       )
    }
    
-   func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> Bool {
+   func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> URL? {
       guard let urlProvider else {
          debug("No urlProvider")
-         return false
+         return nil
       }
-      guard let url = urlProvider.url else {
-         debug("No urlProvider.url")
-         return false
+      let urls = urlProvider.urls
+      if urls.isEmpty {
+         debug("No urlProvider.urls")
+         return nil
       }
       
-      debug("url:\(url.path())\npath:\(path)")
+      let first = urls.first(where: { url in
+         debug("url:\(url.path)\npath:\(path)")
+         
+         let expandedPath = NSString(string: path).expandingTildeInPath
+         let desiredURL = URL(fileURLWithPath: expandedPath)
+         return desiredURL.isContained(in: url)
+      })
       
-      let expandedPath = NSString(string: path).expandingTildeInPath
-      let desiredURL = URL(fileURLWithPath: expandedPath)
-      return desiredURL.isContained(in: url)
+      return first
    }
    
    func createDir(_ serverInfo: ServerInfo,_ responseId: String,at path: String) -> MCPResponse {
@@ -420,7 +425,6 @@ extension Tool_FileSystem: MCPTool {
 
    func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       debug("req:\(req.method)")
-      //debug("req:\n\(req)\narguments:\n\(arguments)")
       
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inPath: String = arguments["path"] as? String ?? "."
@@ -434,14 +438,9 @@ extension Tool_FileSystem: MCPTool {
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
 
-      guard let url = urlProvider?.url else {
-         let message = "Cannot get url"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      guard accessibleURL(urlProvider,inPath)  else {
-         let message = "\(inPath) is not accessible, path is not a child of \(urlProvider?.url?.path() ?? "")"
+      guard let url = accessibleURL(urlProvider,inPath) else {
+         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
+         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths)"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }

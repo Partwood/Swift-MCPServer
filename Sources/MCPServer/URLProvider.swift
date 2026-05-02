@@ -10,5 +10,5 @@ import Foundation
 public
 protocol URLProvider {
    var provider: UUID { get }
-   var url: URL? { get }
+   var urls: Array<URL> { get }
 }
