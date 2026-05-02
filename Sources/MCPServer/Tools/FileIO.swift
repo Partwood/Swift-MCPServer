@@ -126,14 +126,14 @@ class Tool_FileSystem {
          try FileManager.default.createDirectory(at: directoryURL,
                                                  withIntermediateDirectories: true)
          
-         debug("Successfully created \(directoryURL.path)")
+         debug("Successfully created '\(directoryURL.path)'")
       } catch {
-         let message = "Error creating directory, \(error.localizedDescription)"
+         let message = "Error creating directory, error:\(error.localizedDescription)"
          logError(message)
          return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
       }
       
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully created directory \(path)",serverInfo: serverInfo)
+      return MCPResponse.toolSuccess(id: responseId, text: "Successfully created directory '\(path)'",serverInfo: serverInfo)
    }
    
    private func readFileToString(atPath path: String,name: String) -> String? {
@@ -146,12 +146,16 @@ class Tool_FileSystem {
          // Convert to String using UTF-8 encoding
          return String(data: fileData, encoding: .utf8)
       } catch {
-         logError("Error reading file:'\(fileURL.path())' error:'\(error.localizedDescription)'")
+         logError("Error reading file:'\(fileURL.path)' error:'\(error.localizedDescription)'")
          return nil
       }
    }
    
    func readFile(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String) -> MCPResponse {
+      if ( inPath.contains("%20") ) {
+         logWarn("Invalid string!!!")
+      }
+
       var fullContent = Array<Text_Content>()
       
       let fileContent: Text_Content
@@ -238,7 +242,12 @@ class Tool_FileSystem {
 // File content changes
 extension Tool_FileSystem {
    func writeFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,name: String,with content: String) -> MCPResponse {
+      if ( path.contains("%20") ) {
+         logWarn("Invalid string!!!")
+      }
+      
       let fileURL = fileURL(path: path,name)
+      let fileString = fileURL.path(percentEncoded: false)
       let pathURL = fileURL.deletingLastPathComponent()
       
       do {
@@ -247,17 +256,21 @@ extension Tool_FileSystem {
                                                  withIntermediateDirectories: true)
          
          // Write the content to file
-         try content.write(toFile: fileURL.path(), atomically: true, encoding: .utf8)
+         try content.write(toFile: fileString, atomically: true, encoding: .utf8)
       } catch {
-         let message = "Error writing to file:'\(fileURL)', error:'\(error.localizedDescription)'"
+         let message = "Error writing to file:'\(fileString)', error:'\(error.localizedDescription)'"
          logError(message)
          return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
       }
       
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully wrote the content to file:'\(fileURL.path())'",serverInfo: serverInfo)
+      return MCPResponse.toolSuccess(id: responseId, text: "Successfully wrote the content to file:'\(fileString)'",serverInfo: serverInfo)
    }
 
    func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,inPath: String,name:String, atOffset offset: UInt64, newData: Data) -> MCPResponse {
+      if ( inPath.contains("%20") ) {
+         logWarn("Invalid string!!!")
+      }
+      
       let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
       let fileURL = fileURL(path: inPath,name)
       
@@ -315,27 +328,32 @@ extension Tool_FileSystem {
    }
    
    func appendToFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,name: String,with content: String) -> MCPResponse {
+      if ( path.contains("%20") ) {
+         logWarn("Invalid string!!!")
+      }
+
       let fileURL = fileURL(path: path,name)
+      let fileString = fileURL.path(percentEncoded: false)
 
       do {
          // Read existing content if file exists
          var existingContent = ""
-         if FileManager.default.fileExists(atPath: fileURL.path()) {
-            existingContent = try String(contentsOfFile: fileURL.path(), encoding: .utf8)
+         if FileManager.default.fileExists(atPath: fileString) {
+            existingContent = try String(contentsOfFile: fileString, encoding: .utf8)
          }
          
          // Append new content
          let newContent = existingContent + content
          
          // Write the combined content back to file
-         try newContent.write(toFile: fileURL.path(), atomically: true, encoding: .utf8)
+         try newContent.write(toFile: fileString, atomically: true, encoding: .utf8)
       } catch {
-         let message = "Error appending to file '\(fileURL.path())', error: \(error.localizedDescription)"
+         let message = "Error appending to file '\(fileString)', error: \(error.localizedDescription)"
          logError(message)
          return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
       }
       
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully appended the content to file:'\(fileURL.path())'",serverInfo: serverInfo)
+      return MCPResponse.toolSuccess(id: responseId, text: "Successfully appended the content to file:'\(fileString)'",serverInfo: serverInfo)
    }
 }
 

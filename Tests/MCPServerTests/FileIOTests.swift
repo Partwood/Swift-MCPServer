@@ -13,7 +13,7 @@ final class FileIOTests: XCTestCase {
    let serverInfo = ServerInfo(name: "FileIOTest", title: "", version: "", description: "")
    
    func testListDirectory() throws {
-      let t = Tool_FileSystem(serverName: "name", urlProvider: nil)
+      let t = Tool_FileSystem(serverName: "name")
       let result = t.listDirectory(serverInfo,responseId,at: "/Users/jvsherwood/Downloads")
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
@@ -22,13 +22,17 @@ final class FileIOTests: XCTestCase {
    
    // MARK: - Test Writing and Reading a Text File
    
-   func testWriteAndReadTextFile() {
+   func testWriteAndReadTextFile() throws {
       // 1. Define the file content to write
       let expectedContent = "Hello, World!\nThis is a test file.\nWith three lines of content."
       
       // 2. Create a temporary directory for testing
       let tempDir = FileManager.default.temporaryDirectory
-      let testFileURL = tempDir.appendingPathComponent("test_file.txt")
+      
+      let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)+"/child dir")
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+      
+      let testFileURL = directoryURL.appendingPathComponent("test_file.txt")
       
       do {
          // 3. Write content to the file
@@ -48,25 +52,30 @@ final class FileIOTests: XCTestCase {
       try? FileManager.default.removeItem(at: testFileURL)
    }
    
-   func testWriteContent() {
+   func testWriteContent() throws {
       let initialContent = "Hello, World!\nThis is a test file.\nWith three lines of content."
       let fileName = "test_write.txt"
       
       // 2. Create a temporary directory for testing
       let tempDir = FileManager.default.temporaryDirectory
-      let testFileURL = tempDir.appendingPathComponent(fileName)
       
-      let t = Tool_FileSystem(serverName: "name", urlProvider: nil)
-      let result = t.writeFile(serverInfo, responseId, at: tempDir.path(), name: fileName, with: initialContent)
+      let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)).appending(path: "child dir",directoryHint: URL.DirectoryHint.isDirectory)
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+      
+      let testFileURL: URL = directoryURL.appendingPathComponent(fileName)
+      
+      let t = Tool_FileSystem(serverName: "name")
+      let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
+      XCTAssertTrue(result.toolContent?.contains("child dir") ?? false)
       
       do {
          let actualContent = try String(contentsOf: testFileURL, encoding: .utf8)
          
          XCTAssertEqual(initialContent,actualContent, "The file content does not match the expected value.")
          
-         let readResult = t.readFile(serverInfo, responseId, at: tempDir.path(), name: fileName)
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
          XCTAssertNil(result.error)
          XCTAssertFalse(result.isToolError)
          
@@ -79,7 +88,7 @@ final class FileIOTests: XCTestCase {
       try? FileManager.default.removeItem(at: testFileURL)
    }
    
-   func testInsertContent() {
+   func testInsertContent() throws {
       //                              1          2         3                   4         5
       //                    01234567890123 456789012345678901234 5678912345678901234567890123
       let initialContent = "Hello, World!\nThis is a test file.\nWith three lines of content."
@@ -87,10 +96,14 @@ final class FileIOTests: XCTestCase {
       
       // 2. Create a temporary directory for testing
       let tempDir = FileManager.default.temporaryDirectory
-      let testFileURL = tempDir.appendingPathComponent(fileName)
       
-      let t = Tool_FileSystem(serverName: "name", urlProvider: nil)
-      let result = t.writeFile(serverInfo, responseId, at: tempDir.path(), name: fileName, with: initialContent)
+      let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)).appending(path: "child dir",directoryHint: URL.DirectoryHint.isDirectory)
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+
+      let testFileURL = directoryURL.appendingPathComponent(fileName)
+      
+      let t = Tool_FileSystem(serverName: "name")
+      let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
       
@@ -99,7 +112,7 @@ final class FileIOTests: XCTestCase {
          
          XCTAssertEqual(initialContent,actualContent, "The file content does not match the expected value.")
          
-         let readResult = t.readFile(serverInfo, responseId, at: tempDir.path(), name: fileName)
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
          XCTAssertNil(readResult.error)
          XCTAssertFalse(readResult.isToolError)
          
@@ -114,7 +127,7 @@ final class FileIOTests: XCTestCase {
       }
       
       let offset: UInt64 = 35
-      let insertResult = t.insertDataIntoFile(serverInfo, responseId, inPath: tempDir.path(), name: fileName, atOffset: offset, newData: data)
+      let insertResult = t.insertDataIntoFile(serverInfo, responseId, inPath: directoryURL.path(percentEncoded: false), name: fileName, atOffset: offset, newData: data)
       XCTAssertNil(insertResult.error)
       XCTAssertFalse(insertResult.isToolError)
 
@@ -125,7 +138,7 @@ final class FileIOTests: XCTestCase {
          
          XCTAssertEqual(updatedContent,actualContent, "The file content does not match the expected value.")
          
-         let readResult = t.readFile(serverInfo, responseId, at: tempDir.path(), name: fileName)
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
          XCTAssertNil(readResult.error)
          XCTAssertFalse(readResult.isToolError)
          
@@ -138,16 +151,20 @@ final class FileIOTests: XCTestCase {
       try? FileManager.default.removeItem(at: testFileURL)
    }
    
-   func testAppendContent() {
+   func testAppendContent() throws {
       let initialContent = "Hello, World!\nThis is a test file.\nWith three lines of content."
       let fileName = "test_append.txt"
       
       // 2. Create a temporary directory for testing
       let tempDir = FileManager.default.temporaryDirectory
-      let testFileURL = tempDir.appendingPathComponent(fileName)
       
-      let t = Tool_FileSystem(serverName: "name", urlProvider: nil)
-      let result = t.writeFile(serverInfo, responseId, at: tempDir.path(), name: fileName, with: initialContent)
+      let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)).appending(path: "child dir",directoryHint: URL.DirectoryHint.isDirectory)
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+      
+      let testFileURL = directoryURL.appendingPathComponent(fileName)
+      
+      let t = Tool_FileSystem(serverName: "name")
+      let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
       
@@ -156,7 +173,7 @@ final class FileIOTests: XCTestCase {
          
          XCTAssertEqual(initialContent,actualContent, "The file content does not match the expected value.")
          
-         let readResult = t.readFile(serverInfo, responseId, at: tempDir.path(), name: fileName)
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
          XCTAssertNil(readResult.error)
          XCTAssertFalse(readResult.isToolError)
          
@@ -165,7 +182,7 @@ final class FileIOTests: XCTestCase {
          XCTFail("Failed to write or read the file: \(error.localizedDescription)")
       }
       
-      let insertResult = t.appendToFile(serverInfo, responseId, at: tempDir.path(), name: fileName, with: "\nWell now four.")
+      let insertResult = t.appendToFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: "\nWell now four.")
       XCTAssertNil(insertResult.error)
       XCTAssertFalse(insertResult.isToolError)
       
@@ -176,7 +193,7 @@ final class FileIOTests: XCTestCase {
          
          XCTAssertEqual(updatedContent,actualContent, "The file content does not match the expected value.")
          
-         let readResult = t.readFile(serverInfo, responseId, at: tempDir.path(), name: fileName)
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
          XCTAssertNil(readResult.error)
          XCTAssertFalse(readResult.isToolError)
          
