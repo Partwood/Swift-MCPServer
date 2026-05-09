@@ -64,7 +64,8 @@ protocol MCPServer {
    @MainActor
    static func startMCP(serverName: String,title: String,hostname: String,port:Int,
                         resourceProvider: ResourceProvider?,
-                        callback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void))
+                        initCallback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void),
+                        errorListener executionErrorListener: @escaping ((_ error: Error)->Void))
    @MainActor
    func stopMCP() throws
 }
@@ -259,7 +260,8 @@ extension SwiftMCPServer: MCPServer {
    @MainActor public static
    func startMCP(serverName: String,title: String,hostname: String,port:Int,
                  resourceProvider: ResourceProvider? = nil,
-                 callback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void)) {
+                 initCallback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void),
+                 errorListener executionErrorListener: @escaping ((_ error: Error)->Void)) {
       debug("Starting...")
       
       if ( resourceProvider == nil ) {
@@ -278,7 +280,7 @@ extension SwiftMCPServer: MCPServer {
          }
       } catch {
          logError(error)
-         callback(nil, error)
+         initCallback(nil, error)
          return
       }
 
@@ -291,16 +293,18 @@ extension SwiftMCPServer: MCPServer {
             app.routes.defaultMaxBodySize = 10485760 // 10 MB in bytes
             
             let mcpServer = SwiftMCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,resourceProvider: resourceProvider)
-            callback(mcpServer,nil)
-
+            initCallback(mcpServer,nil)
+            
             do {
                try await app.execute()
             } catch {
                logError(error)
+               executionErrorListener(error)
+               return
             }
          } catch {
             logError(error)
-            callback(nil, error)
+            initCallback(nil, error)
          }
       }
    }
