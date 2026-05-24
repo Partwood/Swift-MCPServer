@@ -19,8 +19,9 @@ struct FileSystemTool: Content {
          case createDirectory = "create_directory"
          case findFile = "recursive_find_file"
          case findDir = "recursive_find_dir"
-         case readContent = "read"
-         case writeContent = "write"
+         case readContent = "readAll"
+         case readContentRange = "readRange"
+         case writeContent = "writeAll"
          case insertContent = "insert"
          case appendContent = "append"
 //         case deleteFile
@@ -46,6 +47,22 @@ struct FileSystemTool: Content {
    
    init(serverName: String) {
       name = "mcp_"+serverName+"_filesystem"
+   }
+}
+
+enum Tool_FileSystem_Error: LocalizedError {
+   case path_is_directory(_ url: URL)
+   case path_is_file(_ url: URL)
+}
+
+extension Tool_FileSystem_Error: CustomStringConvertible {
+   var description: String {
+      switch(self) {
+      case .path_is_directory(let url):
+         return NSLocalizedString("Operation error: '\(url)' is a directory", comment: "Unexpected directory")
+      case .path_is_file(let url):
+         return NSLocalizedString("Operation error: '\(url)' is a file", comment: "Unexpected file")
+      }
    }
 }
 
@@ -79,6 +96,10 @@ class Tool_FileSystem {
                "offset": [
                   "type": "number",
                   "description": "When inserting content into a file the location (as an integer) to start the insertion"
+               ],
+               "length": [
+                  "type": "number",
+                  "description": "When reading a range, this the amount (as an integer) to read starting at the specified offset"
                ],
                "fileName": [
                   "type": "string",
@@ -136,8 +157,14 @@ class Tool_FileSystem {
       return MCPResponse.toolSuccess(id: responseId, text: "Successfully created directory '\(path)'",serverInfo: serverInfo)
    }
    
-   private func readFileToString(atPath path: String,name: String) -> String? {
+   private func readFileToString(atPath path: String,name: String) throws -> String? {
       let fileURL = fileURL(path: path,name)
+      
+      if ( fileURL.isDirectory ) {
+         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         logError(error)
+         throw error
+      }
       
       do {
          // Read file contents as Data
@@ -147,7 +174,7 @@ class Tool_FileSystem {
          return String(data: fileData, encoding: .utf8)
       } catch {
          logError("Error reading file:'\(fileURL.path)' error:'\(error.localizedDescription)'")
-         return nil
+         throw error
       }
    }
    
@@ -160,7 +187,15 @@ class Tool_FileSystem {
       
       let fileContent: Text_Content
       
-      if let content = readFileToString(atPath: inPath,name: name) {
+      let stringContent: String?
+      do {
+         stringContent = try readFileToString(atPath: inPath,name: name)
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
+      }
+      
+      if let content = stringContent {
          fileContent = Text_Content(text: content)
          fullContent.append(fileContent)
       } else {
@@ -169,7 +204,50 @@ class Tool_FileSystem {
       
       return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
    }
-   
+
+   func readFile(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,offset: UInt64,length: UInt64) -> MCPResponse {
+      if ( inPath.contains("%20") ) {
+         logWarn("Invalid string!!!")
+      }
+      
+      var fullContent = Array<Text_Content>()
+      
+      let fileContent: Text_Content
+      
+      let fileContentString: String?
+      do {
+         fileContentString = try readFileToString(atPath: inPath,name: name)
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
+      }
+
+      let subString: String?
+      
+      if let content = fileContentString {
+         if let start = content.index(content.startIndex, offsetBy: Int(offset), limitedBy: content.endIndex) {
+            let end = content.index(content.startIndex, offsetBy: Int(offset+length), limitedBy: content.endIndex) ?? content.endIndex
+            subString = String(content[start..<end])
+         } else {
+            let message = "End of file, file:'\(fileURL(path: inPath,name).path())'"
+            debug(message)
+            return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
+         }
+      } else {
+         logWarn("No content in file.")
+         subString = ""
+      }
+
+      if let content = subString {
+         fileContent = Text_Content(text: content)
+         fullContent.append(fileContent)
+      } else {
+         return MCPResponse.toolError(id: responseId, message: "File not found or has no content, file:'\(fileURL(path: inPath,name).path())'", serverInfo: serverInfo)
+      }
+      
+      return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
+   }
+
    func listDirectory(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String) -> MCPResponse {
       let fileManager = FileManager.default
       
@@ -247,6 +325,13 @@ extension Tool_FileSystem {
       }
       
       let fileURL = fileURL(path: path,name)
+      
+      if ( fileURL.isDirectory ) {
+         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         logError(error.description)
+         return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
+      }
+      
       let fileString = fileURL.path(percentEncoded: false)
       let pathURL = fileURL.deletingLastPathComponent()
       
@@ -273,7 +358,13 @@ extension Tool_FileSystem {
       
       let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
       let fileURL = fileURL(path: inPath,name)
-      
+
+      if ( fileURL.isDirectory ) {
+         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         logError(error.description)
+         return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
+      }
+
       do {
          if !FileManager.default.fileExists(atPath: tempFileURL.path()) {
             FileManager.default.createFile(atPath: tempFileURL.path(), contents: nil)
@@ -333,6 +424,13 @@ extension Tool_FileSystem {
       }
 
       let fileURL = fileURL(path: path,name)
+      
+      if ( fileURL.isDirectory ) {
+         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         logError(error.description)
+         return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
+      }
+
       let fileString = fileURL.path(percentEncoded: false)
 
       do {
@@ -490,25 +588,46 @@ extension Tool_FileSystem: MCPTool {
          return find(serverInfo, responseId, in: whichPath, named: fileName,directory: true)
       case .readContent:
          return readFile(serverInfo,responseId,at: whichPath,name: fileName)
+      case .readContentRange:
+         guard let offsetString: String = arguments["offset"] as? String,
+               let whichOffset: UInt64 = UInt64(offsetString) else {
+            logWarn("offset:'\(arguments["offset"])'")
+            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         }
+         guard let lengthString: String = arguments["length"] as? String,
+               let whichLength: UInt64 = UInt64(lengthString) else {
+            logWarn("length:'\(arguments["length"])'")
+            return MCPResponse.toolError(id: responseId, message: "length argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         }
+
+         return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: whichOffset,length: whichLength)
       case .writeContent:
          let whichContent: String = arguments["content"] as? String ?? ""
+         guard !whichContent.isEmpty else {
+            logWarn("content:'\(arguments["content"])'")
+            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
+         }
 
          return writeFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
       case .insertContent:
-         guard let whichOffset: UInt64 = UInt64(arguments["offset"] as? String ?? "0") else {
-            return MCPResponse.toolError(id: responseId, message: "Offset not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         guard let offsetString: String = arguments["offset"] as? String,
+               let whichOffset: UInt64 = UInt64(offsetString) else {
+            logWarn("offset:'\(arguments["offset"])'")
+            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
          }
 
-         guard let whichContent: String = arguments["content"] as? String,
-               let data = whichContent.data(using: .utf8) else {
-            return MCPResponse.toolError(id: responseId, message: "Content not provided or unable to convert the provided content into UTF8 Data",serverInfo: serverInfo)
+         guard let contentString: String = arguments["content"] as? String,
+               let data = contentString.data(using: .utf8) else {
+            logWarn("content:'\(arguments["content"])'")
+            return MCPResponse.toolError(id: responseId, message: "content not provided or unable to convert the provided content into UTF8 Data",serverInfo: serverInfo)
          }
          
          return insertDataIntoFile(serverInfo,responseId,inPath: whichPath,name: fileName,atOffset: whichOffset,newData: data)
       case .appendContent:
          let whichContent: String = arguments["content"] as? String ?? ""
          guard !whichContent.isEmpty else {
-            return MCPResponse.toolError(id: responseId, message: "Content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
+            logWarn("content:'\(arguments["content"])'")
+            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
          }
 
          return appendToFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)

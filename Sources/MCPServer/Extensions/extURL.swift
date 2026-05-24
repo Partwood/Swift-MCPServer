@@ -46,4 +46,20 @@ extension URL {
       
       return result
    }
+
+   var isDirectory: Bool {
+      get {
+         do {
+            let resourceValues = try self.resourceValues(forKeys: [.isDirectoryKey])
+            if resourceValues.isDirectory == true {
+               return true
+            } else {
+               return false
+            }
+         } catch {
+            logError("Error reading URL: \(error.localizedDescription)")
+            return false
+         }
+      }
+   }
 }
