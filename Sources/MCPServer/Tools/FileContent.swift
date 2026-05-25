@@ -9,53 +9,37 @@
 
 import Vapor
 
-struct FileSystemTool: Content {
+struct FileContentTool: Content {
    let name: String
-   static let description = "Perform file system operations like reading and writing files, creating directories, listing directory contents, inserting and appending to files and recursively finding a file or directory under a path."
+   static let description = "Perform file operations like reading and writing files, inserting and appending to files, and finding string occurences in a file."
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
-         case listDirectory = "list"
-         case createDirectory = "create_directory"
-         case findFile = "recursive_find_file"
-         case findDir = "recursive_find_dir"
-         case readContent = "readAll"
-         case readContentRange = "readRange"
-         case writeContent = "writeAll"
+         case findContent = "find_in_file"
+         case readContent = "read_all"
+         case readContentRange = "read_range"
+         case writeContent = "write_all"
          case insertContent = "insert"
          case appendContent = "append"
-//         case deleteFile
-//         case moveFile
-//         case copyFile
-         var requiresFileName: Bool {
-            get {
-               switch(self){
-               case .readContent,.writeContent,.insertContent,.appendContent:
-                  return true
-               default:
-                  return false
-               }
-            }
-         }
       }
       
       //let operation: Operation
       //let path: String
+      //let name: String
       //let content: String? // For write operations
-      //let newPath: String? // For move/copy operations
    }
    
    init(serverName: String) {
-      name = "mcp_"+serverName+"_filesystem"
+      name = "mcp_"+serverName+"_filecontent"
    }
 }
 
-enum Tool_FileSystem_Error: LocalizedError {
+enum Tool_FileContent_Error: LocalizedError {
    case path_is_directory(_ url: URL)
    case path_is_file(_ url: URL)
 }
 
-extension Tool_FileSystem_Error: CustomStringConvertible {
+extension Tool_FileContent_Error: CustomStringConvertible {
    var description: String {
       switch(self) {
       case .path_is_directory(let url):
@@ -67,27 +51,31 @@ extension Tool_FileSystem_Error: CustomStringConvertible {
 }
 
 final
-class Tool_FileSystem {
+class Tool_FileContent {
    let internalDescriptor: Tool
-   let tool: FileSystemTool
+   let tool: FileContentTool
    
    init(serverName: String) {
-      self.tool = FileSystemTool(serverName: serverName)
+      self.tool = FileContentTool(serverName: serverName)
       
       internalDescriptor =
       Tool(
          name: tool.name,
-         description: FileSystemTool.description,
+         description: FileContentTool.description,
          inputSchema: AnyCodable([
             "type": "object",
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "One of the following values:"+FileContentTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
                ],
                "path": [
                   "type": "string",
                   "description": "The location on disk, using the appropriate format for mac, windows or linux"
+               ],
+               "name": [
+                  "type": "string",
+                  "description": "The file or directory name to read, write or find within the path provided"
                ],
                "content": [
                   "type": "string",
@@ -101,16 +89,12 @@ class Tool_FileSystem {
                   "type": "number",
                   "description": "When reading a range, this the amount (as an integer) to read starting at the specified offset"
                ],
-               "fileName": [
+               "find": [
                   "type": "string",
-                  "description": "The file or directory name to read, write or find within the path provided"
-               ],
-               //               "destination": [
-               //                  "type": "string",
-               //                  "description": "The destination location on disk if the operation is move or copy"
-               //               ],
+                  "description": "The string to search for within a file"
+               ]
             ],
-            "required": ["operation", "path"]
+            "required": ["operation", "path", "name"]
          ])
       )
    }
@@ -136,32 +120,15 @@ class Tool_FileSystem {
       
       return first
    }
-   
-   func createDir(_ serverInfo: ServerInfo,_ responseId: String,at path: String) -> MCPResponse {
-      // Convert the tilde path (~/) to an absolute path
-      let expandedPath = NSString(string: path).expandingTildeInPath
-      
-      do {
-         // Create the directory if it doesn't exist
-         let directoryURL = URL(fileURLWithPath: expandedPath)
-         try FileManager.default.createDirectory(at: directoryURL,
-                                                 withIntermediateDirectories: true)
-         
-         debug("Successfully created '\(directoryURL.path)'")
-      } catch {
-         let message = "Error creating directory, error:\(error.localizedDescription)"
-         logError(message)
-         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully created directory '\(path)'",serverInfo: serverInfo)
-   }
-   
+}
+
+// MARK: Read content
+extension Tool_FileContent {
    private func readFileToString(atPath path: String,name: String) throws -> String? {
       let fileURL = fileURL(path: path,name)
       
       if ( fileURL.isDirectory ) {
-         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         let error = Tool_FileContent_Error.path_is_directory(fileURL)
          logError(error)
          throw error
       }
@@ -205,7 +172,7 @@ class Tool_FileSystem {
       return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
    }
 
-   func readFile(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,offset: UInt64,length: UInt64) -> MCPResponse {
+   func readFile(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,offset: Int,length: Int) -> MCPResponse {
       if ( inPath.contains("%20") ) {
          logWarn("Invalid string!!!")
       }
@@ -234,7 +201,7 @@ class Tool_FileSystem {
             return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
       } else {
-         logWarn("No content in file.")
+         logWarn("No content in file, file:'\(fileURL(path: inPath,name).path())'")
          subString = ""
       }
 
@@ -247,78 +214,10 @@ class Tool_FileSystem {
       
       return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
    }
-
-   func listDirectory(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String) -> MCPResponse {
-      let fileManager = FileManager.default
-      
-      let path = NSString(string: inPath).expandingTildeInPath
-      let directoryURL = URL(fileURLWithPath: path)
-      
-      var files = Array<Text_Content>()
-      
-      let decodedRoot: String = path.removingPercentEncoding ?? path
-      
-      do {
-         // Get contents (files and subfolders)
-         let directoryContents = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
-         
-         let _ = directoryContents.map { file in
-            if ( file.lastPathComponent.hasPrefix(".") ) {
-               // Ignore any fie that starts with .
-               return
-            }
-            
-            do {
-               let decodedPath: String = (file.path() as NSString).removingPercentEncoding ?? file.path()
-               
-               let attributes = try fileManager.attributesOfItem(atPath: decodedPath)
-               //debug("File attributes: \(attributes)")
-               
-               let fileAttributes: Text_Content
-               
-               let isDirectory = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-               if ( isDirectory ) {
-                  if let fileType = attributes[FileAttributeKey.type] as? String,
-                     let _ = attributes[FileAttributeKey.creationDate] as? Date,
-                     let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-                     let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
-                     
-                     fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)' is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
-                  } else {
-                     logError("Can't get attributes for directory: '\(file.lastPathComponent)'")
-                     fileAttributes = Text_Content(text: "Couldn't get attributes for directory '\(file.lastPathComponent)' in directory '\(decodedRoot)'")
-                  }
-               } else {
-                  if let fileSize = attributes[FileAttributeKey.size] as? Int64,
-                     let fileType = attributes[FileAttributeKey.type] as? String,
-                     let _ = attributes[FileAttributeKey.creationDate] as? Date,
-                     let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-                     let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
-                     
-                     fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
-                  } else {
-                     logError("Can't get attributes for file: '\(file.lastPathComponent)'")
-                     fileAttributes = Text_Content(text: "Couldn't get attributes for file '\(file.lastPathComponent)' in directory '\(decodedRoot)'")
-                  }
-               }
-               
-               files.append(fileAttributes)
-            } catch {
-               logError(error)
-               debug("Ignoring the prior error as it is on an individual file in a list of files.")
-            }
-         }
-      } catch {
-         logError(error)
-         return MCPResponse.toolError(id: responseId, message: "\(error.localizedDescription)",serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId, content: files,serverInfo: serverInfo)
-   }
 }
 
-// File content changes
-extension Tool_FileSystem {
+// MARK: Write content
+extension Tool_FileContent {
    func writeFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,name: String,with content: String) -> MCPResponse {
       if ( path.contains("%20") ) {
          logWarn("Invalid string!!!")
@@ -327,7 +226,7 @@ extension Tool_FileSystem {
       let fileURL = fileURL(path: path,name)
       
       if ( fileURL.isDirectory ) {
-         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         let error = Tool_FileContent_Error.path_is_directory(fileURL)
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
@@ -351,7 +250,7 @@ extension Tool_FileSystem {
       return MCPResponse.toolSuccess(id: responseId, text: "Successfully wrote the content to file:'\(fileString)'",serverInfo: serverInfo)
    }
 
-   func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,inPath: String,name:String, atOffset offset: UInt64, newData: Data) -> MCPResponse {
+   func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,inPath: String,name:String, atOffset offset: Int, newData: Data) -> MCPResponse {
       if ( inPath.contains("%20") ) {
          logWarn("Invalid string!!!")
       }
@@ -360,7 +259,7 @@ extension Tool_FileSystem {
       let fileURL = fileURL(path: inPath,name)
 
       if ( fileURL.isDirectory ) {
-         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         let error = Tool_FileContent_Error.path_is_directory(fileURL)
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
@@ -389,7 +288,7 @@ extension Tool_FileSystem {
          
          // 4. Read the rest of original and append
          // Seek to the insertion point in the original file again to ensure we get the rest
-         try originalHandle.seek(toOffset: offset)
+         try originalHandle.seek(toOffset: UInt64(offset))
          let dataAfterOffset = try originalHandle.readToEnd()
          
          if let dataAfterOffset = dataAfterOffset {
@@ -415,7 +314,13 @@ extension Tool_FileSystem {
       // Convert the tilde path (~/) to an absolute path
       let expandedPath = NSString(string: inPath).expandingTildeInPath
       let root = URL(fileURLWithPath: expandedPath)
-      return root.appendingPathComponent(name)
+      
+      if root.lastPathComponent == name {
+         // Allow for cases where the name is already part of the path
+         return root
+      } else {
+         return root.appendingPathComponent(name)
+      }
    }
    
    func appendToFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,name: String,with content: String) -> MCPResponse {
@@ -426,7 +331,7 @@ extension Tool_FileSystem {
       let fileURL = fileURL(path: path,name)
       
       if ( fileURL.isDirectory ) {
-         let error = Tool_FileSystem_Error.path_is_directory(fileURL)
+         let error = Tool_FileContent_Error.path_is_directory(fileURL)
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
@@ -455,8 +360,8 @@ extension Tool_FileSystem {
    }
 }
 
-// Find
-extension Tool_FileSystem {
+// MARK: Find
+extension Tool_FileContent {
    func find(_ serverInfo: ServerInfo,_ responseId: String,in rootPath: String,named name: String,directory: Bool) -> MCPResponse {
       let expandedRootPath = NSString(string: rootPath).expandingTildeInPath
       let fileManager = FileManager.default
@@ -525,9 +430,152 @@ extension Tool_FileSystem {
       
       return foundItems
    }
+   
+   private struct SearchResult {
+      let lineNumber: Int
+      let characterOffset: Int
+      let byteOffset: Int
+   }
+   
+   private func find(string target: String,content: String) -> [SearchResult] {
+      var results: [SearchResult] = []
+      let lines = content.components(separatedBy: "\n")
+      var currentByteOffset = 0
+      var currentCharacterOffset = 0
+      
+      for (lineIdx, line) in lines.enumerated() {
+         // Line indices in editor usually start at 1
+         let lineNumber = lineIdx + 1
+         
+         // Find all occurrences within the current line
+         var searchRange = line.startIndex..<line.endIndex
+         while let range = line.range(of: target, options: [], range: searchRange) {
+            
+            // 1. Character distance from start of file
+            let charDistance = content.distance(from: content.startIndex, to: range.lowerBound)
+            
+            // 2. Byte offset (UTF-8)
+            let substring = content[..<range.lowerBound]
+            let byteOffset = substring.utf8.count
+            
+            results.append(SearchResult(
+               lineNumber: lineNumber,
+               characterOffset: charDistance,
+               byteOffset: byteOffset
+            ))
+            
+            // Advance search range to find subsequent occurrences on the same line
+            searchRange = range.upperBound..<line.endIndex
+         }
+         
+         // Add lengths of line + "\n" to offsets for the next iteration
+         let lineWithNewline = line + "\n"
+         currentCharacterOffset += lineWithNewline.count
+         currentByteOffset += lineWithNewline.utf8.count
+      }
+      
+      return results
+   }
+   
+   func findContent(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,find string:String) -> MCPResponse {
+      do {
+         if let fileContentString = try readFileToString(atPath: inPath,name: name) {
+            let searchResults = find(string: string,content: fileContentString)
+            
+            var results = [Text_Content]()
+            
+            for result in searchResults {
+               let textContent = Text_Content(text: "Found '" + string + "' on line:\(result.lineNumber) at char offset:\(result.characterOffset), byte offset:\(result.byteOffset)")
+               results.append(textContent)
+            }
+            
+            return MCPResponse.toolSuccess(id: responseId, content: results, serverInfo: serverInfo)
+         } else {
+            let message = "No UTF8 string content present in file:\(name)"
+            logWarn(message)
+            return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
+         }
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
+      }
+   }
 }
 
-extension Tool_FileSystem: MCPTool {
+extension Tool_FileContent {
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileContentTool.Input.Operation,_ whichPath: String) -> MCPResponse {
+      let fileName = arguments["name"] as? String ?? ""
+      guard !fileName.isEmpty else {
+         return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
+      }
+      
+      switch operation {
+      case .findContent:
+         guard let content = arguments["find"] as? String,
+               !content.isEmpty else {
+            let message = "find not provided for operation:'\(operation.rawValue)'"
+            logWarn(message)
+            return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
+         }
+         
+         return findContent(serverInfo,responseId,at: whichPath,name: fileName,find: content)
+      case .readContent:
+         return readFile(serverInfo,responseId,at: whichPath,name: fileName)
+      case .readContentRange:
+         guard let offset = asInteger(arguments,"offset") else {
+            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         }
+         guard let length = asInteger(arguments, "length") else {
+            return MCPResponse.toolError(id: responseId, message: "length argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         }
+
+         return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: offset,length: length)
+      case .writeContent:
+         let whichContent: String = arguments["content"] as? String ?? ""
+         guard !whichContent.isEmpty else {
+            logWarn("content:'\(arguments["content"] ?? "nil")'")
+            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
+         }
+
+         return writeFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
+      case .insertContent:
+         guard let offset = asInteger(arguments,"offset") else {
+            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         }
+
+         guard let contentString: String = arguments["content"] as? String,
+               let data = contentString.data(using: .utf8) else {
+            logWarn("content:'\(arguments["content"] ?? "nil")'")
+            return MCPResponse.toolError(id: responseId, message: "content not provided or unable to convert the provided content into UTF8 Data",serverInfo: serverInfo)
+         }
+         
+         return insertDataIntoFile(serverInfo,responseId,inPath: whichPath,name: fileName,atOffset: offset,newData: data)
+      case .appendContent:
+         let whichContent: String = arguments["content"] as? String ?? ""
+         guard !whichContent.isEmpty else {
+            logWarn("content:'\(arguments["content"] ?? "nil")'")
+            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
+         }
+
+         return appendToFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
+      }
+   }
+   
+   private func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
+      if let intValue: Int = arguments[key] as? Int {
+         return intValue
+      } else if let valueString: String = arguments[key] as? String,
+         let intValue: Int = Int(valueString) {
+         return intValue
+      } else {
+         logWarn("\(key):'\(arguments[key] ?? "nil")' type:\(arguments[key].self ?? "nil")")
+         return nil
+      }
+   }
+}
+
+// MARK: MCPTool
+extension Tool_FileContent: MCPTool {
    var name: String { get { return self.tool.name } }
    var descriptor: Tool { get { return self.internalDescriptor } }
    
@@ -538,25 +586,25 @@ extension Tool_FileSystem: MCPTool {
    func attributeValue(attribute: MCPToolAttribute, value: String) {
       // Does nothing
    }
-
+   
    func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       debug("req:\(req.method)")
       
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inPath: String = arguments["path"] as? String ?? "."
-
-      let possibleOperation = FileSystemTool.Input.Operation(rawValue: inOperation)
+      
+      let possibleOperation = FileContentTool.Input.Operation(rawValue: inOperation)
       
       guard let operation = possibleOperation else {
-         let operations = FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
+         let operations = FileContentTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
          let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
-
+      
       guard let url = accessibleURL(urlProvider,inPath) else {
          let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
-         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths)"
+         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
@@ -567,70 +615,5 @@ extension Tool_FileSystem: MCPTool {
       let result = handleOperation(serverInfo,responseId,arguments,operation,inPath)
       url.stopAccessingSecurityScopedResource()
       return result
-   }
-   
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileSystemTool.Input.Operation,_ whichPath: String) -> MCPResponse {
-      let fileName = arguments["fileName"] as? String ?? ""
-      if operation.requiresFileName {
-         guard !fileName.isEmpty else {
-            return MCPResponse.toolError(id: responseId, message: "Filename not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
-         }
-      }
-      
-      switch operation {
-      case .listDirectory:
-         return listDirectory(serverInfo,responseId,at: whichPath)
-      case .createDirectory:
-         return createDir(serverInfo,responseId,at: whichPath)
-      case .findFile:
-         return find(serverInfo, responseId, in: whichPath, named: fileName,directory: false)
-      case .findDir:
-         return find(serverInfo, responseId, in: whichPath, named: fileName,directory: true)
-      case .readContent:
-         return readFile(serverInfo,responseId,at: whichPath,name: fileName)
-      case .readContentRange:
-         guard let offsetString: String = arguments["offset"] as? String,
-               let whichOffset: UInt64 = UInt64(offsetString) else {
-            logWarn("offset:'\(arguments["offset"])'")
-            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
-         }
-         guard let lengthString: String = arguments["length"] as? String,
-               let whichLength: UInt64 = UInt64(lengthString) else {
-            logWarn("length:'\(arguments["length"])'")
-            return MCPResponse.toolError(id: responseId, message: "length argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
-         }
-
-         return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: whichOffset,length: whichLength)
-      case .writeContent:
-         let whichContent: String = arguments["content"] as? String ?? ""
-         guard !whichContent.isEmpty else {
-            logWarn("content:'\(arguments["content"])'")
-            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
-         }
-
-         return writeFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
-      case .insertContent:
-         guard let offsetString: String = arguments["offset"] as? String,
-               let whichOffset: UInt64 = UInt64(offsetString) else {
-            logWarn("offset:'\(arguments["offset"])'")
-            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
-         }
-
-         guard let contentString: String = arguments["content"] as? String,
-               let data = contentString.data(using: .utf8) else {
-            logWarn("content:'\(arguments["content"])'")
-            return MCPResponse.toolError(id: responseId, message: "content not provided or unable to convert the provided content into UTF8 Data",serverInfo: serverInfo)
-         }
-         
-         return insertDataIntoFile(serverInfo,responseId,inPath: whichPath,name: fileName,atOffset: whichOffset,newData: data)
-      case .appendContent:
-         let whichContent: String = arguments["content"] as? String ?? ""
-         guard !whichContent.isEmpty else {
-            logWarn("content:'\(arguments["content"])'")
-            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
-         }
-
-         return appendToFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
-      }
    }
 }

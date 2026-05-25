@@ -18,6 +18,12 @@ final class TeamCityTests: XCTestCase {
       // Put teardown code here. This method is called after the invocation of each test method in the class.
    }
 
+   func validateOperations() throws {
+      for enumValue in TeamCityTool.Input.Operation.allCases {
+         XCTAssertTrue(enumValue.rawValue.lowercased() == enumValue.rawValue)
+      }
+   }
+
    /**
     Use the tool mcp_SwagenticMCP_teamcity and url http://192.168.1.7:8111
     Tell me the most recent status of each build type

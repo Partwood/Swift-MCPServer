@@ -8,16 +8,14 @@
 import XCTest
 @testable import Swift_MCPServer
 
-final class FileIOTests: XCTestCase {
+final class FileContentTests: XCTestCase {
    let responseId = "-1"
-   let serverInfo = ServerInfo(name: "FileIOTest", title: "", version: "", description: "")
+   let serverInfo = ServerInfo(name: "FileContentTest", title: "", version: "", description: "")
    
-   func testListDirectory() throws {
-      let t = Tool_FileSystem(serverName: "name")
-      let result = t.listDirectory(serverInfo,responseId,at: "/Users/jvsherwood/Downloads")
-      XCTAssertNil(result.error)
-      XCTAssertFalse(result.isToolError)
-      debug("Ok!")
+   func validateOperations() throws {
+      for enumValue in FileContentTool.Input.Operation.allCases {
+         XCTAssertTrue(enumValue.rawValue.lowercased() == enumValue.rawValue)
+      }
    }
    
    // MARK: - Test Writing and Reading a Text File
@@ -64,7 +62,7 @@ final class FileIOTests: XCTestCase {
       
       let testFileURL: URL = directoryURL.appendingPathComponent(fileName)
       
-      let t = Tool_FileSystem(serverName: "name")
+      let t = Tool_FileContent(serverName: "name")
       let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
@@ -99,10 +97,10 @@ final class FileIOTests: XCTestCase {
       
       let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)).appending(path: "child dir",directoryHint: URL.DirectoryHint.isDirectory)
       try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-
+      
       let testFileURL = directoryURL.appendingPathComponent(fileName)
       
-      let t = Tool_FileSystem(serverName: "name")
+      let t = Tool_FileContent(serverName: "name")
       let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
@@ -126,11 +124,11 @@ final class FileIOTests: XCTestCase {
          return
       }
       
-      let offset: UInt64 = 35
+      let offset: Int = 35
       let insertResult = t.insertDataIntoFile(serverInfo, responseId, inPath: directoryURL.path(percentEncoded: false), name: fileName, atOffset: offset, newData: data)
       XCTAssertNil(insertResult.error)
       XCTAssertFalse(insertResult.isToolError)
-
+      
       do {
          let updatedContent = "Hello, World!\nThis is a test file.\nNow With three lines of content."
          
@@ -146,7 +144,7 @@ final class FileIOTests: XCTestCase {
       } catch {
          XCTFail("Failed to write or read the file: \(error.localizedDescription)")
       }
-
+      
       // 6. Clean up (delete the test file)
       try? FileManager.default.removeItem(at: testFileURL)
    }
@@ -163,7 +161,7 @@ final class FileIOTests: XCTestCase {
       
       let testFileURL = directoryURL.appendingPathComponent(fileName)
       
-      let t = Tool_FileSystem(serverName: "name")
+      let t = Tool_FileContent(serverName: "name")
       let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
@@ -188,6 +186,174 @@ final class FileIOTests: XCTestCase {
       
       do {
          let updatedContent = "Hello, World!\nThis is a test file.\nWith three lines of content.\nWell now four."
+         
+         let actualContent = try String(contentsOf: testFileURL, encoding: .utf8)
+         
+         XCTAssertEqual(updatedContent,actualContent, "The file content does not match the expected value.")
+         
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
+         XCTAssertNil(readResult.error)
+         XCTAssertFalse(readResult.isToolError)
+         
+         XCTAssertEqual(updatedContent,readResult.toolContent, "Read content does not match the expected value.")
+      } catch {
+         XCTFail("Failed to write or read the file: \(error.localizedDescription)")
+      }
+      
+      // 6. Clean up (delete the test file)
+      try? FileManager.default.removeItem(at: testFileURL)
+   }
+   
+   // Show that sending insert content with an offset that is a number (integer) works
+   func testInsertContentViaOperation() throws {
+      //                              1          2         3                   4         5
+      //                    01234567890123 456789012345678901234 5678912345678901234567890123
+      let initialContent = "Hello, World!\nThis is a test file.\nWith three lines of content."
+      let fileName = "test_insert.txt"
+      
+      // 2. Create a temporary directory for testing
+      let tempDir = FileManager.default.temporaryDirectory
+      
+      let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)).appending(path: "child dir",directoryHint: URL.DirectoryHint.isDirectory)
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+      
+      let testFileURL = directoryURL.appendingPathComponent(fileName)
+      
+      let t = Tool_FileContent(serverName: "name")
+      let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
+      XCTAssertNil(result.error)
+      XCTAssertFalse(result.isToolError)
+      
+      do {
+         let actualContent = try String(contentsOf: testFileURL, encoding: .utf8)
+         
+         XCTAssertEqual(initialContent,actualContent, "The file content does not match the expected value.")
+         
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
+         XCTAssertNil(readResult.error)
+         XCTAssertFalse(readResult.isToolError)
+         
+         XCTAssertEqual(initialContent,readResult.toolContent, "Read content does not match the expected value.")
+      } catch {
+         XCTFail("Failed to write or read the file: \(error.localizedDescription)")
+      }
+      
+      let si = ServerInfo(name: "test", title: "insert", version: "1.0", description: "test")
+      let req = MCPRequest(id: 1, method: "insert", params: nil)
+      var args: [String:Any] = [String:Any]()
+      
+      let offset: Int = 35
+      
+      args["operation"] = "insert"
+      args["path"] = directoryURL.path(percentEncoded: false)
+      args["name"] = fileName
+      args["offset"] = offset
+      args["content"] = "Now "
+      
+      class TestProvider: URLProvider {
+         let id = UUID()
+         private var testUrls = Array<URL>()
+         
+         init(_ url: URL) {
+            testUrls.append(url)
+         }
+         
+         var provider: UUID { get {return self.id }}
+         var urls: Array<URL> { get {return self.testUrls }}
+      }
+      
+      let provider = TestProvider(directoryURL)
+      
+      let response = try t.handleOperation(si, provider, req, "responseId", args)
+      XCTAssertNil(response.error)
+      XCTAssertFalse(response.isToolError)
+      
+      do {
+         let updatedContent = "Hello, World!\nThis is a test file.\nNow With three lines of content."
+         
+         let actualContent = try String(contentsOf: testFileURL, encoding: .utf8)
+         
+         XCTAssertEqual(updatedContent,actualContent, "The file content does not match the expected value.")
+         
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
+         XCTAssertNil(readResult.error)
+         XCTAssertFalse(readResult.isToolError)
+         
+         XCTAssertEqual(updatedContent,readResult.toolContent, "Read content does not match the expected value.")
+      } catch {
+         XCTFail("Failed to write or read the file: \(error.localizedDescription)")
+      }
+      
+      // 6. Clean up (delete the test file)
+      try? FileManager.default.removeItem(at: testFileURL)
+   }
+   
+   // Show that sending insert content with an offset that is a string works
+   func testInsertContentViaOperationWithString() throws {
+      //                              1          2         3                   4         5
+      //                    01234567890123 456789012345678901234 5678912345678901234567890123
+      let initialContent = "Hello, World!\nThis is a test file.\nWith three lines of content."
+      let fileName = "test_insert.txt"
+      
+      // 2. Create a temporary directory for testing
+      let tempDir = FileManager.default.temporaryDirectory
+      
+      let directoryURL = URL(fileURLWithPath: tempDir.path(percentEncoded: false)).appending(path: "child dir",directoryHint: URL.DirectoryHint.isDirectory)
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+      
+      let testFileURL = directoryURL.appendingPathComponent(fileName)
+      
+      let t = Tool_FileContent(serverName: "name")
+      let result = t.writeFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName, with: initialContent)
+      XCTAssertNil(result.error)
+      XCTAssertFalse(result.isToolError)
+      
+      do {
+         let actualContent = try String(contentsOf: testFileURL, encoding: .utf8)
+         
+         XCTAssertEqual(initialContent,actualContent, "The file content does not match the expected value.")
+         
+         let readResult = t.readFile(serverInfo, responseId, at: directoryURL.path(percentEncoded: false), name: fileName)
+         XCTAssertNil(readResult.error)
+         XCTAssertFalse(readResult.isToolError)
+         
+         XCTAssertEqual(initialContent,readResult.toolContent, "Read content does not match the expected value.")
+      } catch {
+         XCTFail("Failed to write or read the file: \(error.localizedDescription)")
+      }
+      
+      let si = ServerInfo(name: "test", title: "insert", version: "1.0", description: "test")
+      let req = MCPRequest(id: 1, method: "insert", params: nil)
+      var args: [String:Any] = [String:Any]()
+      
+      let offset: String = "35"
+      
+      args["operation"] = "insert"
+      args["path"] = directoryURL.path(percentEncoded: false)
+      args["name"] = fileName
+      args["offset"] = offset
+      args["content"] = "Now "
+      
+      class TestProvider: URLProvider {
+         let id = UUID()
+         private var testUrls = Array<URL>()
+         
+         init(_ url: URL) {
+            testUrls.append(url)
+         }
+         
+         var provider: UUID { get {return self.id }}
+         var urls: Array<URL> { get {return self.testUrls }}
+      }
+      
+      let provider = TestProvider(directoryURL)
+      
+      let response = try t.handleOperation(si, provider, req, "responseId", args)
+      XCTAssertNil(response.error)
+      XCTAssertFalse(response.isToolError)
+      
+      do {
+         let updatedContent = "Hello, World!\nThis is a test file.\nNow With three lines of content."
          
          let actualContent = try String(contentsOf: testFileURL, encoding: .utf8)
          

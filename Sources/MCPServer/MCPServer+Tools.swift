@@ -8,6 +8,7 @@
 import Vapor
 
 extension SwiftMCPServer {
+   // MARK: Tool Registration
    func registerTools() {
       // Define your available tools
       var tools = [:] as [String: MCPTool]
@@ -19,7 +20,10 @@ extension SwiftMCPServer {
       
       mcpTool = Tool_FileSystem(serverName: self.name)
       tools[mcpTool.name] = mcpTool
-      
+
+      mcpTool = Tool_FileContent(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+
       mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       

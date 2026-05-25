@@ -91,7 +91,7 @@ final class JsonStructureTests: XCTestCase {
        convertedValue = try object.prettyPrintedJSONString
        debug(convertedValue)
        
-       let obj1 = [[],[]]
+       //let obj1 = [[],[]]
        
        let example =
        AnyCodable([

@@ -17,6 +17,12 @@ final class GitTests: XCTestCase {
       // Put teardown code here. This method is called after the invocation of each test method in the class.
    }
    
+   func validateOperations() throws {
+      for enumValue in GitTool.Input.Operation.allCases {
+         XCTAssertTrue(enumValue.rawValue.lowercased() == enumValue.rawValue)
+      }
+   }
+
    /*
     Using the tool mcp_SwagenticMCP_git can you tell me the status in /Users/jvsherwood/Desktop/projects/Packages/Swift-MCPServer/
     Do not use mcp_SwagenticMCP_filesystem
