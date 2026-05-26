@@ -11,7 +11,7 @@ import Vapor
 
 struct FileSystemTool: Content {
    let name: String
-   static let description = "Perform file system operations like creating directories, listing directory contents, recursively finding a file or directory under a path by name."
+   static let description = "Provides file system operations for creating directories, listing directory contents, and recursively finding a file or directory under a path."
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {

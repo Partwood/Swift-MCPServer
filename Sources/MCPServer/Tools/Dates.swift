@@ -51,7 +51,12 @@ class Tool_SystemDate {
    func date(_ serverInfo: ServerInfo,_ responseId: String) throws -> MCPResponse {
       var values = Array<Text_Content>()
 
-      values.append(Text_Content(text: "\(Date())"))
+      let date = Date()
+      let standard = date.formatted(date: .abbreviated, time: .shortened)
+      let text = "\(date)\n\(standard)"
+      
+      debug(text)
+      values.append(Text_Content(text: text))
       
       return MCPResponse.toolSuccess(id: responseId, content: values,serverInfo: serverInfo)
    }

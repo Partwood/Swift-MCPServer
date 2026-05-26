@@ -11,7 +11,7 @@ import Vapor
 
 struct FileContentTool: Content {
    let name: String
-   static let description = "Perform file operations like reading and writing files, inserting and appending to files, and finding string occurences in a file."
+   static let description = "Provides operations for reading, writing, inserting, appending and finding string occurences within files."
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
@@ -71,27 +71,31 @@ class Tool_FileContent {
                ],
                "path": [
                   "type": "string",
-                  "description": "The location on disk, using the appropriate format for mac, windows or linux"
+                  "description": "The path to a file or directory"
                ],
                "name": [
                   "type": "string",
-                  "description": "The file or directory name to read, write or find within the path provided"
+                  "description": "The file or directory name"
                ],
                "content": [
                   "type": "string",
-                  "description": "The content of a file to be either written entirely or inserted"
+                  "description": "The content to be written"
                ],
-               "offset": [
+               "line_offset": [
                   "type": "number",
-                  "description": "When inserting content into a file the location (as an integer) to start the insertion"
+                  "description": "The offset in lines as an integer"
                ],
-               "length": [
+               "offset_in_bytes": [
                   "type": "number",
-                  "description": "When reading a range, this the amount (as an integer) to read starting at the specified offset"
+                  "description": "The offset in bytes as an integer"
+               ],
+               "length_in_bytes": [
+                  "type": "number",
+                  "description": "The length in bytes as an integer"
                ],
                "find": [
                   "type": "string",
-                  "description": "The string to search for within a file"
+                  "description": "The string to find in a file"
                ]
             ],
             "required": ["operation", "path", "name"]
@@ -500,6 +504,59 @@ extension Tool_FileContent {
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
    }
+   
+   enum FindError: LocalizedError {
+      case read_error
+      
+      var errorDescription: String? {
+         switch self {
+         case .read_error:
+            return NSLocalizedString("Failed to read file.", comment: "Read error")
+         }
+      }
+   }
+   
+   func findByteOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,_ lineOffset: Int) -> Result<Int,FindError> {
+      if ( lineOffset == 0 ) {
+         return Result<Int,FindError>.success(0)
+      }
+      
+      let fileContentString: String
+      do {
+         if let content = try readFileToString(atPath: inPath,name: name) {
+            fileContentString = content
+            
+         } else {
+            return Result<Int,FindError>.failure(.read_error)
+         }
+      } catch {
+         logError(error)
+         return Result<Int,FindError>.failure(.read_error)
+      }
+      
+      // File read, determine byte offset
+      let lines = fileContentString.components(separatedBy: "\n")
+      
+      if ( lines.count <= lineOffset ) {
+         let byteOffset = fileContentString.utf8.count
+         return Result<Int,FindError>.success(byteOffset)
+      }
+      
+      var currentByteOffset = 0
+      
+      var adjustedOffset = lineOffset+1
+      for line in lines {
+         adjustedOffset -= 1
+         if ( adjustedOffset <= 0 ) {
+            return Result<Int,FindError>.success(currentByteOffset)
+         }
+         
+         let lineWithNewline = line + "\n"
+         currentByteOffset += lineWithNewline.utf8.count
+      }
+      
+      return Result<Int,FindError>.success(currentByteOffset)
+   }
 }
 
 extension Tool_FileContent {
@@ -522,11 +579,21 @@ extension Tool_FileContent {
       case .readContent:
          return readFile(serverInfo,responseId,at: whichPath,name: fileName)
       case .readContentRange:
-         guard let offset = asInteger(arguments,"offset") else {
-            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         let offset: Int
+         
+         let offsetResult = getOffset(serverInfo, responseId, arguments, path: whichPath, name: fileName)
+         switch(offsetResult) {
+         case .success(let value):
+            offset = value.offset
+         case .failure(let offsetError):
+            switch(offsetError) {
+            case .mcpError(let response):
+               return response
+            }
          }
-         guard let length = asInteger(arguments, "length") else {
-            return MCPResponse.toolError(id: responseId, message: "length argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+
+         guard let length = asInteger(arguments, "length_in_bytes") else {
+            return MCPResponse.toolError(id: responseId, message: "length_in_bytes argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
          }
 
          return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: offset,length: length)
@@ -539,8 +606,17 @@ extension Tool_FileContent {
 
          return writeFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
       case .insertContent:
-         guard let offset = asInteger(arguments,"offset") else {
-            return MCPResponse.toolError(id: responseId, message: "offset argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
+         let offset: Int
+
+         let offsetResult = getOffset(serverInfo, responseId, arguments, path: whichPath, name: fileName)
+         switch(offsetResult) {
+         case .success(let value):
+            offset = value.offset
+         case .failure(let offsetError):
+            switch(offsetError) {
+            case .mcpError(let response):
+               return response
+            }
          }
 
          guard let contentString: String = arguments["content"] as? String,
@@ -560,12 +636,68 @@ extension Tool_FileContent {
          return appendToFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
       }
    }
+}
+
+// MARK: Offset
+extension Tool_FileContent {
+   struct OffsetSuccess {
+      var offset: Int
+   }
+   
+   enum OffsetError: Error {
+      case mcpError(response: MCPResponse)
+   }
+   
+   // Ensure that the offset value is > 0 and an integer, if using line_offset must have same constraints and be converted
+   func getOffset(_ serverInfo: ServerInfo,_ responseId: String,_ arguments: [String : Any],path: String,name:String) -> Result<OffsetSuccess, OffsetError> {
+      if let _ = arguments["offset"] {
+         // byte offset provided
+         if let integerValue = asInteger(arguments, "offset") {
+            if ( integerValue < 0 ) {
+               let response = MCPResponse.toolError(id: responseId, message: "offset is not a positive integer",serverInfo: serverInfo)
+               return Result.failure(OffsetError.mcpError(response: response))
+            } else {
+               return Result.success(OffsetSuccess(offset: integerValue))
+            }
+         } else {
+            let response = MCPResponse.toolError(id: responseId, message: "offset is not an integer",serverInfo: serverInfo)
+            return Result.failure(OffsetError.mcpError(response: response))
+         }
+      } else if let _ = arguments["line_offset"] {
+         if let integerValue = asInteger(arguments, "line_offset") {
+            // line offset provided, convert to bytes
+            if ( integerValue == 0 ) {
+               return Result.success(OffsetSuccess(offset: 0))
+            } else if ( integerValue < 0 ) {
+               let response = MCPResponse.toolError(id: responseId, message: "line_offset is not a positive integer",serverInfo: serverInfo)
+               return Result.failure(OffsetError.mcpError(response: response))
+            } else {
+               let result = findByteOffset(serverInfo,responseId,at: path,name: name,integerValue)
+               switch(result) {
+               case .success(let value):
+                  return Result.success(OffsetSuccess(offset: value))
+               case .failure(let someError):
+                  let message = "line_offset error:\(someError.localizedDescription)"
+                  logError(message)
+                  let response = MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+                  return Result.failure(OffsetError.mcpError(response: response))
+               }
+            }
+         } else {
+            let response = MCPResponse.toolError(id: responseId, message: "line_offset is not an integer",serverInfo: serverInfo)
+            return Result.failure(OffsetError.mcpError(response: response))
+         }
+      } else {
+         let response = MCPResponse.toolError(id: responseId, message: "offset or line_offset argument not provided",serverInfo: serverInfo)
+         return Result.failure(OffsetError.mcpError(response: response))
+      }
+   }
    
    private func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
       if let intValue: Int = arguments[key] as? Int {
          return intValue
       } else if let valueString: String = arguments[key] as? String,
-         let intValue: Int = Int(valueString) {
+                let intValue: Int = Int(valueString) {
          return intValue
       } else {
          logWarn("\(key):'\(arguments[key] ?? "nil")' type:\(arguments[key].self ?? "nil")")
