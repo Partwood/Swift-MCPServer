@@ -11,7 +11,19 @@ import Vapor
 
 struct FileContentTool: Content {
    let name: String
-   static let description = "Provides operations for reading, writing, inserting, appending and finding string occurences within files."
+   
+   // Helper method to load the description from FileContentDescription.md
+   static func loadDescription() -> String {
+      do {
+         // Read the content of FileContentDescription.md directly from the filesystem
+         let filePath = "/Users/jvsherwood/projects/Packages/Swift-MCPServer/Sources/MCPServer/Tools/FileContentDescription.md"
+         let content = try String(contentsOfFile: filePath)
+         return content
+      } catch {
+         // Fallback to a default description in case of an error
+         return "Default tool description"
+      }
+   }
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
@@ -22,7 +34,17 @@ struct FileContentTool: Content {
          case insertContent = "insert"
          case appendContent = "append"
       }
-      
+
+      enum Arguments: String, Codable, CaseIterable {
+         case find = "find"
+         case length_in_bytes = "length_in_bytes"
+         case offset_in_bytes = "offset_in_bytes"
+         case line_offset = "line_offset"
+         case content = "content"
+         case name = "name"
+         case path = "path"
+      }
+
       //let operation: Operation
       //let path: String
       //let name: String
@@ -61,7 +83,7 @@ class Tool_FileContent {
       internalDescriptor =
       Tool(
          name: tool.name,
-         description: FileContentTool.description,
+         description: FileContentTool.loadDescription(),
          inputSchema: AnyCodable([
             "type": "object",
             "properties": [
