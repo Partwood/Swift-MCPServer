@@ -60,7 +60,7 @@ extension SwiftMCPServer {
       
       if let first = self.internalTools[name] {
          do {
-            let response = try first.handleOperation(self.readableServerInfo,urlProvider,req,"\(responseId)",arguments)
+            let response = try first.handleOperation(self.readableServerInfo,urlProvider,"\(responseId)",arguments)
             return response
          } catch {
             logError(error)

@@ -741,8 +741,8 @@ extension Tool_FileContent: MCPTool {
       // Does nothing
    }
    
-   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      debug("req:\(req.method)")
+   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+      //debug("req:\(req.method)")
       
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inPath: String = arguments["path"] as? String ?? "."

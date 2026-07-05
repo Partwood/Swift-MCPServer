@@ -290,7 +290,7 @@ extension Tool_Git: MCPTool {
       // Do nothing
    }
    
-   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?,_ req: MCPRequest, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       let argOperation: String = arguments["operation"] as? String ?? ""
       let possibleOperation = GitTool.Input.Operation(rawValue: argOperation)
 

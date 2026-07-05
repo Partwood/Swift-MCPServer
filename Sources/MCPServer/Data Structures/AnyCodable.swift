@@ -7,13 +7,16 @@
 import Vapor
 
 // Helper to handle any Codable type
+public
 struct AnyCodable: Codable, @unchecked Sendable {
    let value: Any
    
+   public
    init(_ value: Any) {
       self.value = value
    }
    
+   public
    init(from decoder: Decoder) throws {
       let container = try decoder.singleValueContainer()
       if let intVal = try? container.decode(Int.self) {
@@ -37,6 +40,7 @@ struct AnyCodable: Codable, @unchecked Sendable {
       case value
    }
 
+   public
    func encode(to encoder: Encoder) throws {
       var container = encoder.singleValueContainer()
       switch value {
@@ -77,6 +81,7 @@ struct AnyCodable: Codable, @unchecked Sendable {
       }
    }
    
+   public
    func encodeForSSE() -> String? {
       do {
          if let encodable = self.value as? Encodable {
@@ -102,6 +107,7 @@ struct AnyCodable: Codable, @unchecked Sendable {
 }
 
 extension AnyCodable: CustomStringConvertible {
+   public
    var description: String {
       return self.encodeForSSE() ?? "Conversion Failed"
    }

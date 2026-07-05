@@ -15,6 +15,14 @@ struct ServerInfo {
    var version: String
    var description: String
    
+   public
+   init(name: String, title: String, version: String, description: String) {
+      self.name = name
+      self.title = title
+      self.version = version
+      self.description = description
+   }
+   
    var asDictionary: [String: Any] {
       get {
          var dictionary = [String: Any]()
@@ -45,7 +53,7 @@ public
 struct Tool: Content {
    public let name: String
    public let description: String
-   let inputSchema: AnyCodable
+   public let inputSchema: AnyCodable
    
    enum CodingKeys: String, CodingKey {
       case name
