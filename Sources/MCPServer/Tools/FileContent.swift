@@ -365,17 +365,15 @@ extension Tool_FileContent {
       let fileString = fileURL.path(percentEncoded: false)
 
       do {
-         // Read existing content if file exists
-         var existingContent = ""
-         if FileManager.default.fileExists(atPath: fileString) {
-            existingContent = try String(contentsOfFile: fileString, encoding: .utf8)
+         // Open the file in append mode
+         if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(content.data(using: .utf8)!)
+            fileHandle.closeFile()
+         } else {
+            // If the file doesn't exist, create it and write the content
+            try content.write(toFile: fileString, atomically: true, encoding: .utf8)
          }
-         
-         // Append new content
-         let newContent = existingContent + content
-         
-         // Write the combined content back to file
-         try newContent.write(toFile: fileString, atomically: true, encoding: .utf8)
       } catch {
          let message = "Error appending to file '\(fileString)', error: \(error.localizedDescription)"
          logError(message)
