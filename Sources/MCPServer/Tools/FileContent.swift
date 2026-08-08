@@ -14,12 +14,19 @@ struct FileContentTool: Content {
    
    // Helper method to load the description from FileContentDescription.md
    static func loadDescription() -> String {
+      let resourceName: String = "FileContentDescription"
+      
       do {
-         // Read the content of FileContentDescription.md directly from the filesystem
-         let filePath = "/Users/jvsherwood/projects/Packages/Swift-MCPServer/Sources/MCPServer/Tools/FileContentDescription.md"
-         let content = try String(contentsOfFile: filePath)
-         return content
+         if let filePath = Bundle.module.url(forResource: resourceName, withExtension: "md") {
+            // Read your file data here
+            let textContent = try String(contentsOf: filePath, encoding: .utf8)
+            return textContent
+         } else {
+            throw ContextArchiveToolError.resource_not_found
+         }
       } catch {
+         logError(error)
+         assertionFailure(error.localizedDescription)
          // Fallback to a default description in case of an error
          return "Default tool description"
       }
@@ -713,7 +720,7 @@ extension Tool_FileContent {
       }
    }
    
-   private func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
+   func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
       if let intValue: Int = arguments[key] as? Int {
          return intValue
       } else if let valueString: String = arguments[key] as? String,

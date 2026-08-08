@@ -29,6 +29,10 @@ let package = Package(
             dependencies: [
                .product(name: "Vapor", package: "vapor"),
                .product(name: "SwiftGitX", package: "SwiftGitX")
+            ],
+            resources: [
+               .process("Resources/ContextArchiveDescription.md"),
+               .process("Resources/FileContentDescription.md")
             ]
         ),
         .testTarget(
