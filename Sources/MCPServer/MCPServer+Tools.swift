@@ -24,9 +24,6 @@ extension SwiftMCPServer {
       mcpTool = Tool_FileContent(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
-      mcpTool = Tool_ContextArchive(serverName: self.name)
-      tools[mcpTool.name] = mcpTool
-
       mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       
@@ -36,10 +33,13 @@ extension SwiftMCPServer {
       self.internalTools = tools
    }
    
-   func listTools(_ responseId: Int) -> MCPResponse {
-      debug("Listing:\n\(self.tools.map({$0.name}))")
+   func listTools(_ context: [String:String],_ responseId: Int) -> MCPResponse {
+      let tools: Array<Tool> = self.tools(context)
+      let mcpTools: Array<MCPTool> = self.mcpTools(context)
       
-      let descriptorArray: Array<Tool> = self.internalTools.map({$0.value.descriptor})
+      debug("Listing:\n\(tools.map({$0.name}))")
+      
+      let descriptorArray: Array<Tool> = mcpTools.map({$0.descriptor})
       let response = MCPResponse(id: String("\(responseId)"),
                   result: [
                      "tools": AnyCodable(descriptorArray)

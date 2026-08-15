@@ -35,11 +35,12 @@ struct ServerInfo {
    }
 }
 
+public
 struct Text_Content: Content {
    let type: String
    let text: String
    
-   init(type: String = "text", text: String) {
+   public init(type: String = "text", text: String) {
       self.type = type
       self.text = text
    }
@@ -59,6 +60,12 @@ struct Tool: Content {
       case name
       case description
       case inputSchema = "inputSchema"
+   }
+   
+   public init(name: String, description: String, inputSchema: AnyCodable) {
+      self.name = name
+      self.description = description
+      self.inputSchema = inputSchema
    }
 }
 
@@ -110,7 +117,7 @@ struct MCPResponse: Content {
       return MCPResponse.toolError(id: configuration.response_id,message: message,serverInfo: configuration.serverInfo)
    }
    
-   static func toolError(id: String,message: String,serverInfo: ServerInfo) -> MCPResponse {
+   public static func toolError(id: String,message: String,serverInfo: ServerInfo) -> MCPResponse {
       let body = Text_Content(type: "text", text: message)
       
       var content = [String:AnyCodable]()
@@ -132,7 +139,7 @@ struct MCPResponse: Content {
       return MCPResponse.toolSuccess(id: configuration.response_id, content: values, serverInfo: configuration.serverInfo)
    }
    
-   static func toolSuccess(id: String,content values:Array<Text_Content>,serverInfo: ServerInfo) -> MCPResponse {
+   public static func toolSuccess(id: String,content values:Array<Text_Content>,serverInfo: ServerInfo) -> MCPResponse {
       var content = [String:AnyCodable]()
       content["content"] = AnyCodable(values)
       return MCPResponse.success(id: id, result: content,serverInfo: serverInfo)

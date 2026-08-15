@@ -9,6 +9,10 @@
 
 import Vapor
 
+enum FileContentToolError: Error {
+   case resource_not_found
+}
+
 struct FileContentTool: Content {
    let name: String
    
@@ -22,7 +26,7 @@ struct FileContentTool: Content {
             let textContent = try String(contentsOf: filePath, encoding: .utf8)
             return textContent
          } else {
-            throw ContextArchiveToolError.resource_not_found
+            throw FileContentToolError.resource_not_found
          }
       } catch {
          logError(error)
@@ -79,12 +83,13 @@ extension Tool_FileContent_Error: CustomStringConvertible {
    }
 }
 
+public
 final
 class Tool_FileContent {
    let internalDescriptor: Tool
    let tool: FileContentTool
    
-   init(serverName: String) {
+   public init(serverName: String) {
       self.tool = FileContentTool(serverName: serverName)
       
       internalDescriptor =
@@ -667,16 +672,16 @@ extension Tool_FileContent {
 
 // MARK: Offset
 extension Tool_FileContent {
-   struct OffsetSuccess {
-      var offset: Int
+   public struct OffsetSuccess {
+      public var offset: Int
    }
    
-   enum OffsetError: Error {
+   public enum OffsetError: Error {
       case mcpError(response: MCPResponse)
    }
    
    // Ensure that the offset value is > 0 and an integer, if using line_offset must have same constraints and be converted
-   func getOffset(_ serverInfo: ServerInfo,_ responseId: String,_ arguments: [String : Any],path: String,name:String) -> Result<OffsetSuccess, OffsetError> {
+   public func getOffset(_ serverInfo: ServerInfo,_ responseId: String,_ arguments: [String : Any],path: String,name:String) -> Result<OffsetSuccess, OffsetError> {
       if let _ = arguments["offset"] {
          // byte offset provided
          if let integerValue = asInteger(arguments, "offset") {
@@ -720,7 +725,7 @@ extension Tool_FileContent {
       }
    }
    
-   func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
+   public func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
       if let intValue: Int = arguments[key] as? Int {
          return intValue
       } else if let valueString: String = arguments[key] as? String,
@@ -735,18 +740,18 @@ extension Tool_FileContent {
 
 // MARK: MCPTool
 extension Tool_FileContent: MCPTool {
-   var name: String { get { return self.tool.name } }
-   var descriptor: Tool { get { return self.internalDescriptor } }
+   public var name: String { get { return self.tool.name } }
+   public var descriptor: Tool { get { return self.internalDescriptor } }
    
-   var attributes: [MCPToolAttribute] {
+   public var attributes: [MCPToolAttribute] {
       return []
    }
    
-   func attributeValue(attribute: MCPToolAttribute, value: String) {
+   public func attributeValue(attribute: MCPToolAttribute, value: String) {
       // Does nothing
    }
    
-   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       //debug("req:\(req.method)")
       
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()

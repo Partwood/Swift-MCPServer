@@ -1,5 +1,21 @@
 # Description
-Allows reading all of the full context for the session, or parts of the full context.
+Allows reading all of the full context for the session, or parts of the full context. Each time a user interacts with an agent the archive will add that interaction as an entry in the archive, recording the date and the messages that ocurred. Entries are ordered by most recent first, oldest last.
+
+## info
+### Description
+Provides information about the size of the context archive, the number of entries and the date range (end/start)
+### Arguments
+*path* The directory where the file is located.<br>
+<br>
+
+## list
+### Description
+List a subset of the entries, starting at an offset and count. For example 'list offset:10 count:5' would return 5 entries starting at offset 10. 
+### Arguments
+*path* The directory where the file is located.<br>
+*offset* zero based offset into the list of entries
+*amount* amount of entries to return
+<br>
 
 ## find
 ### Description

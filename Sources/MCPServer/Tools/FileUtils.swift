@@ -29,19 +29,20 @@ enum FileContentFindError: Error {
    //case valueError(type: String,value: String,root: (any Error))
 }
 
-typealias FileReadResult = Result<FileRead,FileReadError>
+public typealias FileReadResult = Result<FileRead,FileReadError>
 
-struct FileRead {
-   var content = Array<Text_Content>()
+public struct FileRead {
+   public var content = Array<Text_Content>()
 }
 
-enum FileReadError: Error {
+public enum FileReadError: Error {
    case error(message: String,root: (any Error))
    case eof(message: String)
    //case utfError(message: String)
    //case valueError(type: String,value: String,root: (any Error))
 }
 
+public
 final
 class FileUtils {
    static func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> URL? {
@@ -66,7 +67,7 @@ class FileUtils {
       return first
    }
 
-   static func fileURL(path inPath: String,_ name: String) -> URL {
+   public static func fileURL(path inPath: String,_ name: String) -> URL {
       // Convert the tilde path (~/) to an absolute path
       let expandedPath = NSString(string: inPath).expandingTildeInPath
       let root = URL(fileURLWithPath: expandedPath)
@@ -79,7 +80,7 @@ class FileUtils {
       }
    }
 
-   static func readFileToString(atPath path: String,name: String) throws -> String? {
+   public static func readFileToString(atPath path: String,name: String) throws -> String? {
       let fileURL = fileURL(path: path,name)
       
       if ( fileURL.isDirectory ) {
@@ -103,7 +104,7 @@ class FileUtils {
 
 // MARK: Read file content
 extension FileUtils {
-   static func readFileOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,offset: Int,length: Int) -> FileReadResult {
+   public static func readFileOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,offset: Int,length: Int) -> FileReadResult {
       if ( inPath.contains("%20") ) {
          logWarn("Invalid string!!!")
       }
@@ -235,13 +236,13 @@ extension FileUtils {
 
 // MARK: Find Content
 extension FileUtils {
-   struct SearchResult {
-      let lineNumber: Int
-      let characterOffset: Int
-      let byteOffset: Int
+   public struct SearchResult {
+      public let lineNumber: Int
+      public let characterOffset: Int
+      public let byteOffset: Int
    }
    
-   static func find(string target: String,content: String) -> [SearchResult] {
+   public static func find(string target: String,content: String) -> [SearchResult] {
       var results: [SearchResult] = []
       let lines = content.components(separatedBy: "\n")
       var currentByteOffset = 0

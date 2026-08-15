@@ -58,16 +58,18 @@ protocol MCPServer {
    var hostname: String { get }
    var port: Int { get }
    
-   var mcpTools: Array<MCPTool> { get }
-   var tools: Array<Tool>{ get }
-
    @MainActor
    static func startMCP(serverName: String,title: String,hostname: String,port:Int,
                         resourceProvider: ResourceProvider?,
+                        toolProvider: ToolProvider?,
                         initCallback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void),
                         errorListener executionErrorListener: @escaping ((_ error: Error)->Void))
    @MainActor
    func stopMCP() throws
+
+   func sharedMCPTools() -> Array<MCPTool>
+   func mcpTools(_ context: [String:String]) -> Array<MCPTool>
+   func tools(_ context: [String:String]) -> Array<Tool>
 }
 
 public
@@ -84,6 +86,7 @@ class SwiftMCPServer {
    private var serverInfo: ServerInfo
    
    var resourceProvider: ResourceProvider?
+   var toolProvider: ToolProvider?
       
    public
    var readableServerInfo: ServerInfo {
@@ -114,12 +117,15 @@ class SwiftMCPServer {
    }
    
    public
-   init(app: Application,name: String,title: String, hostname: String, port: Int,resourceProvider: ResourceProvider?) {
+   init(app: Application,name: String,title: String, hostname: String, port: Int,
+        resourceProvider: ResourceProvider?,
+        toolProvider: ToolProvider?) {
       self.app = app
       self.lastResponseBody = ""
       self.configuration = MCPServerConfiguration(name: name, hostname: hostname, port: port)
       self.serverInfo = ServerInfo(name: name,title: title, version: "1.0.0", description: "An example MCP server providing tools and resources")
       self.resourceProvider = resourceProvider
+      self.toolProvider = toolProvider
 
       configureRoutes()
       registerTools()
@@ -128,13 +134,13 @@ class SwiftMCPServer {
       app.middleware.use(NotFoundTrackerMiddleware())
    }
       
-   private func handleRequest(_ urlProvider: URLProvider?,_ request: MCPRequest, on eventLoop: EventLoop) -> EventLoopFuture<MCPResponse> {
+   private func handleRequest(_ urlProvider: URLProvider?,_ context: [String:String],_ request: MCPRequest, on eventLoop: EventLoop) -> EventLoopFuture<MCPResponse> {
       return eventLoop.makeSucceededFuture(
-         handleRequest(urlProvider, request)
+         handleRequest(urlProvider, context, request)
       )
    }
    
-   private func handleRequest(_ urlProvider: URLProvider?,_ request: MCPRequest) -> MCPResponse {
+   private func handleRequest(_ urlProvider: URLProvider?,_ context: [String:String],_ request: MCPRequest) -> MCPResponse {
       if let request_id = request.id {
          if ( request_id == 0 ) {
             self.requestId += 1
@@ -152,7 +158,7 @@ class SwiftMCPServer {
       case "completions":
          return completions(params: request.params)
       case "tools/list":
-         return listTools(responseId)
+         return listTools(context, responseId)
       case "tools/call":
          return callTool(urlProvider, request, responseId,params: request.params)
       default:
@@ -245,21 +251,34 @@ extension SwiftMCPServer: MCPServer {
       }
    }
    
-   public
-   var mcpTools: Array<any MCPTool> {
-      self.internalTools.map({ $0.value })
+   public func sharedMCPTools() -> Array<any MCPTool> {
+      return self.internalTools.map({ $0.value })
+   }
+
+   public func mcpTools(_ context: [String : String]) -> Array<any MCPTool> {
+      var tools = self.internalTools.map({ $0.value })
+
+      if let externalTools = self.toolProvider?.tools(context) {
+         tools.append(contentsOf: externalTools)
+      }
+
+      return tools
    }
    
-   public
-   var tools: Array<Tool>{
-      get {
-         return self.internalTools.map({$0.value.descriptor})
+   public func tools(_ context: [String : String]) -> Array<Tool> {
+      var tools = self.internalTools.map({$0.value.descriptor})
+      
+      if let externalTools = self.toolProvider?.tools(context) {
+         tools.append(contentsOf: externalTools.map({ $0.descriptor }))
       }
+      
+      return tools
    }
 
    @MainActor public static
    func startMCP(serverName: String,title: String,hostname: String,port:Int,
                  resourceProvider: ResourceProvider? = nil,
+                 toolProvider: ToolProvider? = nil,
                  initCallback: @escaping ((_ server: MCPServer?,_ error: Error?)->Void),
                  errorListener executionErrorListener: @escaping ((_ error: Error)->Void)) {
       debug("Starting...")
@@ -269,7 +288,13 @@ extension SwiftMCPServer: MCPServer {
       } else {
          debug("ResourceProvider is present")
       }
-      
+
+      if ( toolProvider == nil ) {
+         debug("No ToolProvider present (nil)")
+      } else {
+         debug("ToolProvider is present")
+      }
+
       var env: Environment
       do {
          env = try Environment.detect()
@@ -292,7 +317,9 @@ extension SwiftMCPServer: MCPServer {
             app.http.server.configuration.port = port
             app.routes.defaultMaxBodySize = 10485760 // 10 MB in bytes
             
-            let mcpServer = SwiftMCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,resourceProvider: resourceProvider)
+            let mcpServer = SwiftMCPServer(app: app,name: serverName,title: title,hostname: hostname,port: port,
+                                           resourceProvider: resourceProvider,
+                                           toolProvider: toolProvider)
             initCallback(mcpServer,nil)
             
             do {
@@ -464,7 +491,12 @@ extension SwiftMCPServer {
          return req.eventLoop.makeSucceededFuture(Response(status: .noContent))
       }
 
-      let futureMCPResponse = self.handleRequest(getURLProvider(req),request, on: req.eventLoop)
+      var sharedHeaders = [String:String]()
+      req.headers.forEach({ pair in
+         sharedHeaders[pair.name] = pair.value
+      })
+
+      let futureMCPResponse = self.handleRequest(getURLProvider(req), sharedHeaders, request, on: req.eventLoop)
       let mcpResponse = try futureMCPResponse.wait()
       
       let mcp_session_id = self.mcpSessionId
@@ -500,8 +532,13 @@ extension SwiftMCPServer {
          return req.eventLoop.makeSucceededFuture(Response(status: .noContent,
                                                            headers: headers))
       }
-      
-      let mcpResponse: MCPResponse = self.handleRequest(getURLProvider(req),request)
+
+      var sharedHeaders = [String:String]()
+      req.headers.forEach({ pair in
+         sharedHeaders[pair.name] = pair.value
+      })
+
+      let mcpResponse: MCPResponse = self.handleRequest(getURLProvider(req), sharedHeaders, request)
             
       let responseBody: String = (mcpResponse.encodeForSSE() ?? "{}")
       self.lastResponseBody = responseBody
