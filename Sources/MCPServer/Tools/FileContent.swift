@@ -18,7 +18,7 @@ struct FileContentTool: Content {
    
    // Helper method to load the description from FileContentDescription.md
    static func loadDescription() -> String {
-      let resourceName: String = "FileContentDescription"
+      let resourceName: String = "FileContent"
       
       do {
          if let filePath = Bundle.module.url(forResource: resourceName, withExtension: "md") {
@@ -41,9 +41,6 @@ struct FileContentTool: Content {
          case findContent = "find_in_file"
          case readContent = "read_all"
          case readContentRange = "read_range"
-         case writeContent = "write_all"
-         case insertContent = "insert"
-         case appendContent = "append"
       }
 
       enum Arguments: String, Codable, CaseIterable {
@@ -162,27 +159,6 @@ class Tool_FileContent {
 
 // MARK: Read content
 extension Tool_FileContent {
-   private func readFileToString(atPath path: String,name: String) throws -> String? {
-      let fileURL = fileURL(path: path,name)
-      
-      if ( fileURL.isDirectory ) {
-         let error = Tool_FileContent_Error.path_is_directory(fileURL)
-         logError(error)
-         throw error
-      }
-      
-      do {
-         // Read file contents as Data
-         let fileData = try Data(contentsOf: fileURL)
-         
-         // Convert to String using UTF-8 encoding
-         return String(data: fileData, encoding: .utf8)
-      } catch {
-         logError("Error reading file:'\(fileURL.path)' error:'\(error.localizedDescription)'")
-         throw error
-      }
-   }
-   
    func readFile(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String) -> MCPResponse {
       if ( inPath.contains("%20") ) {
          logWarn("Invalid string!!!")
@@ -194,7 +170,7 @@ extension Tool_FileContent {
       
       let stringContent: String?
       do {
-         stringContent = try readFileToString(atPath: inPath,name: name)
+         stringContent = try FileUtils.readFileToString(atPath: inPath,name: name)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
@@ -204,7 +180,7 @@ extension Tool_FileContent {
          fileContent = Text_Content(text: content)
          fullContent.append(fileContent)
       } else {
-         return MCPResponse.toolError(id: responseId, message: "File not found or has no content, file:'\(fileURL(path: inPath,name).path())'", serverInfo: serverInfo)
+         return MCPResponse.toolError(id: responseId, message: "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path())'", serverInfo: serverInfo)
       }
       
       return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
@@ -221,7 +197,7 @@ extension Tool_FileContent {
       
       let fileContentString: String?
       do {
-         fileContentString = try readFileToString(atPath: inPath,name: name)
+         fileContentString = try FileUtils.readFileToString(atPath: inPath,name: name)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
@@ -234,12 +210,12 @@ extension Tool_FileContent {
             let end = content.index(content.startIndex, offsetBy: Int(offset+length), limitedBy: content.endIndex) ?? content.endIndex
             subString = String(content[start..<end])
          } else {
-            let message = "End of file, file:'\(fileURL(path: inPath,name).path())'"
+            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
             debug(message)
             return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
       } else {
-         logWarn("No content in file, file:'\(fileURL(path: inPath,name).path())'")
+         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path())'")
          subString = ""
       }
 
@@ -247,152 +223,10 @@ extension Tool_FileContent {
          fileContent = Text_Content(text: content)
          fullContent.append(fileContent)
       } else {
-         return MCPResponse.toolError(id: responseId, message: "File not found or has no content, file:'\(fileURL(path: inPath,name).path())'", serverInfo: serverInfo)
+         return MCPResponse.toolError(id: responseId, message: "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path())'", serverInfo: serverInfo)
       }
       
       return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
-   }
-}
-
-// MARK: Write content
-extension Tool_FileContent {
-   func writeFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,name: String,with content: String) -> MCPResponse {
-      if ( path.contains("%20") ) {
-         logWarn("Invalid string!!!")
-      }
-      
-      let fileURL = fileURL(path: path,name)
-      
-      if ( fileURL.isDirectory ) {
-         let error = Tool_FileContent_Error.path_is_directory(fileURL)
-         logError(error.description)
-         return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
-      }
-      
-      let fileString = fileURL.path(percentEncoded: false)
-      let pathURL = fileURL.deletingLastPathComponent()
-      
-      do {
-         // Create the directory if it doesn't exist
-         try FileManager.default.createDirectory(at: pathURL,
-                                                 withIntermediateDirectories: true)
-         
-         // Write the content to file
-         try content.write(toFile: fileString, atomically: true, encoding: .utf8)
-      } catch {
-         let message = "Error writing to file:'\(fileString)', error:'\(error.localizedDescription)'"
-         logError(message)
-         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully wrote the content to file:'\(fileString)'",serverInfo: serverInfo)
-   }
-
-   func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,inPath: String,name:String, atOffset offset: Int, newData: Data) -> MCPResponse {
-      if ( inPath.contains("%20") ) {
-         logWarn("Invalid string!!!")
-      }
-      
-      let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-      let fileURL = fileURL(path: inPath,name)
-
-      if ( fileURL.isDirectory ) {
-         let error = Tool_FileContent_Error.path_is_directory(fileURL)
-         logError(error.description)
-         return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
-      }
-
-      do {
-         if !FileManager.default.fileExists(atPath: tempFileURL.path()) {
-            FileManager.default.createFile(atPath: tempFileURL.path(), contents: nil)
-         }
-         
-         let originalHandle = try FileHandle(forReadingFrom: fileURL)
-         let tempHandle = try FileHandle(forWritingTo: tempFileURL)
-         defer {
-            try? originalHandle.close()
-            try? tempHandle.close()
-         }
-         
-         // 1. Read up to the offset
-         try originalHandle.seek(toOffset: 0)
-         if let dataBeforeOffset = try originalHandle.read(upToCount: Int(offset)) {
-            // 2. Write to temp file
-            try tempHandle.write(contentsOf: dataBeforeOffset)
-         }
-         
-         // 3. Write new data
-         try tempHandle.write(contentsOf: newData)
-         
-         // 4. Read the rest of original and append
-         // Seek to the insertion point in the original file again to ensure we get the rest
-         try originalHandle.seek(toOffset: UInt64(offset))
-         let dataAfterOffset = try originalHandle.readToEnd()
-         
-         if let dataAfterOffset = dataAfterOffset {
-            try tempHandle.write(contentsOf: dataAfterOffset)
-         }
-         
-         // 5. Replace original file
-         try FileManager.default.removeItem(at: fileURL)
-         try FileManager.default.moveItem(at: tempFileURL, to: fileURL)
-         debug("Data inserted successfully at offset \(offset) into file:\(fileURL)")
-      } catch {
-         let message = "Error inserting data into file:'\(fileURL.path())', error: \(error.localizedDescription)"
-         logError(message)
-         // Clean up temp file on error
-         try? FileManager.default.removeItem(at: tempFileURL)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path())'" ,serverInfo: serverInfo)
-   }
-
-   private func fileURL(path inPath: String,_ name: String) -> URL {
-      // Convert the tilde path (~/) to an absolute path
-      let expandedPath = NSString(string: inPath).expandingTildeInPath
-      let root = URL(fileURLWithPath: expandedPath)
-      
-      if root.lastPathComponent == name {
-         // Allow for cases where the name is already part of the path
-         return root
-      } else {
-         return root.appendingPathComponent(name)
-      }
-   }
-   
-   func appendToFile(_ serverInfo: ServerInfo,_ responseId: String,at path: String,name: String,with content: String) -> MCPResponse {
-      if ( path.contains("%20") ) {
-         logWarn("Invalid string!!!")
-      }
-
-      let fileURL = fileURL(path: path,name)
-      
-      if ( fileURL.isDirectory ) {
-         let error = Tool_FileContent_Error.path_is_directory(fileURL)
-         logError(error.description)
-         return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
-      }
-
-      let fileString = fileURL.path(percentEncoded: false)
-
-      do {
-         // Open the file in append mode
-         if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(content.data(using: .utf8)!)
-            fileHandle.closeFile()
-         } else {
-            // If the file doesn't exist, create it and write the content
-            try content.write(toFile: fileString, atomically: true, encoding: .utf8)
-         }
-      } catch {
-         let message = "Error appending to file '\(fileString)', error: \(error.localizedDescription)"
-         logError(message)
-         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId, text: "Successfully appended the content to file:'\(fileString)'",serverInfo: serverInfo)
    }
 }
 
@@ -515,7 +349,7 @@ extension Tool_FileContent {
    
    func findContent(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,find string:String) -> MCPResponse {
       do {
-         if let fileContentString = try readFileToString(atPath: inPath,name: name) {
+         if let fileContentString = try FileUtils.readFileToString(atPath: inPath,name: name) {
             let searchResults = find(string: string,content: fileContentString)
             
             var results = [Text_Content]()
@@ -555,7 +389,7 @@ extension Tool_FileContent {
       
       let fileContentString: String
       do {
-         if let content = try readFileToString(atPath: inPath,name: name) {
+         if let content = try FileUtils.readFileToString(atPath: inPath,name: name) {
             fileContentString = content
             
          } else {
@@ -629,43 +463,6 @@ extension Tool_FileContent {
          }
 
          return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: offset,length: length)
-      case .writeContent:
-         let whichContent: String = arguments["content"] as? String ?? ""
-         guard !whichContent.isEmpty else {
-            logWarn("content:'\(arguments["content"] ?? "nil")'")
-            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
-         }
-
-         return writeFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
-      case .insertContent:
-         let offset: Int
-
-         let offsetResult = getOffset(serverInfo, responseId, arguments, path: whichPath, name: fileName)
-         switch(offsetResult) {
-         case .success(let value):
-            offset = value.offset
-         case .failure(let offsetError):
-            switch(offsetError) {
-            case .mcpError(let response):
-               return response
-            }
-         }
-
-         guard let contentString: String = arguments["content"] as? String,
-               let data = contentString.data(using: .utf8) else {
-            logWarn("content:'\(arguments["content"] ?? "nil")'")
-            return MCPResponse.toolError(id: responseId, message: "content not provided or unable to convert the provided content into UTF8 Data",serverInfo: serverInfo)
-         }
-         
-         return insertDataIntoFile(serverInfo,responseId,inPath: whichPath,name: fileName,atOffset: offset,newData: data)
-      case .appendContent:
-         let whichContent: String = arguments["content"] as? String ?? ""
-         guard !whichContent.isEmpty else {
-            logWarn("content:'\(arguments["content"] ?? "nil")'")
-            return MCPResponse.toolError(id: responseId, message: "content not provided for operation:'\(operation.rawValue)'",serverInfo: serverInfo)
-         }
-
-         return appendToFile(serverInfo,responseId,at: whichPath,name: fileName,with: whichContent)
       }
    }
 }

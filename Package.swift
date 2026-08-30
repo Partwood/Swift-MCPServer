@@ -31,8 +31,9 @@ let package = Package(
                .product(name: "SwiftGitX", package: "SwiftGitX")
             ],
             resources: [
-               .process("Resources/ContextArchiveDescription.md"),
-               .process("Resources/FileContentDescription.md")
+               .process("Resources/FileAppend.md"),
+               .process("Resources/FileContent.md"),
+               .process("Resources/FileInsert.md")
             ]
         ),
         .testTarget(
@@ -41,4 +42,3 @@ let package = Package(
         ),
     ]
 )
-   

@@ -23,6 +23,12 @@ extension SwiftMCPServer {
 
       mcpTool = Tool_FileContent(serverName: self.name)
       tools[mcpTool.name] = mcpTool
+      
+      mcpTool = Tool_FileAppend(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+
+      mcpTool = Tool_FileInsert(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
 
       mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
