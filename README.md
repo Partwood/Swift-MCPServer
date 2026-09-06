@@ -16,9 +16,46 @@ The core server (`MCPServer.swift`) handles the primary logic for managing conne
 
 ### Tools
 Tools are modular components that perform specific tasks:
-- **FileIO**: Handles file operations such as reading, writing, and directory listing.
+
+- **File Content**: Handles file operations such as reading, writing, and searching for content within files.
+  - **Operations**:
+    - `find_in_file`: Find an exact string in a file.
+    - `read_all`: Read the entire content of a file.
+    - `read_range`: Read a part of the content of a file, using either a byte offset or a line offset.
+
+- **File System**: Provides file system operations for creating directories, listing directory contents, and recursively finding a file or directory under a path.
+  - **Operations**:
+    - `list`: List directory contents.
+    - `create_directory`: Create a directory.
+    - `recursive_find_file`: Recursively find a file.
+    - `recursive_find_dir`: Recursively find a directory.
+
+- **Git**: A tool for interacting with Git repositories.
+  - **Operations**:
+    - `clone`: Clone a repository.
+    - `init`: Initialize a repository.
+    - `status`: Get the status of a repository.
+    - `add`: Add files to the repository.
+    - `commit`: Commit changes with a message.
+    - `push`: Push changes to the repository.
+    - `branch`: Create a new branch.
+    - `switch`: Switch to an existing branch.
+
 - **Dates**: Provides utilities for date and time manipulations.
+  - **Operations**:
+    - `date`: Get the current date and time.
+
 - **TeamCity**: Interfaces with TeamCity to allow build monitoring and execution.
+  - **Operations**:
+    - `status`: Get the status of a build in TeamCity.
+
+- **File Insert**: Provides operations for inserting content into a file.
+  - **Operations**:
+    - `insert`: Insert content at a specified offset (byte or line).
+
+- **File Append**: Provides operations for appending content to the end of a file.
+  - **Operations**:
+    - `append`: Append content to the end of a file.
 
 ### Data Structures
 Custom data structures to support complex data types:
@@ -51,7 +88,7 @@ import MCPServer
 The project includes a comprehensive test suite to ensure reliability and correctness:
 - **MCPServerTests**: Tests for core server functionality.
 - **FileIOTests**: Tests for file operations.
-- **TeamCityTests**: Tests for basic teamcity operation (assuming token access is configured).
+- **TeamCityTests**: Tests for basic TeamCity operation (assuming token access is configured).
 - **AnyCodableTests**: Tests for type-erased codable types.
 
 Run tests using Swift Package Manager:
@@ -62,4 +99,4 @@ swift test
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE` for more details. Additional MIT License coverage for Vapor and SwiftGitX
+This project is licensed under the MIT License. See `LICENSE` for more details. Additional MIT License coverage for Vapor and SwiftGitX.
