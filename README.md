@@ -67,6 +67,55 @@ Extensions provide additional functionality to existing types:
 - **URL Extensions**: Enhances URL handling capabilities.
 - **Encodable Extensions**: Adds convenience methods for encoding data.
 
+## Providers
+
+Providers are used to abstract and manage dynamic components like URLs and tools, making the project more flexible and modular.
+
+### URLProvider
+
+Manages a collection of URLs, providing methods to retrieve and update them. Useful for scenarios where URLs need to be dynamically fetched or updated at runtime.
+
+- **Key Features**:
+  - Unique identifier (`provider`) for each provider instance.
+  - Dynamic URL management with `auxUrls(_:)`.
+  - Used in tools like `FileContent` and `FileSystem` to validate and access file paths securely.
+
+- **Example Use Case**:
+  Fetching or updating API endpoints dynamically.
+
+```swift
+public protocol URLProvider {
+    var provider: UUID { get }
+    var urls: Array<URL> { get }
+
+    func auxUrls(_ urls: Array<URL>)
+}
+```
+
+### ToolProvider
+
+Manages and caches tools (`MCPTool`) based on runtime contexts. Provides methods to retrieve tools dynamically and cache them for performance optimization.
+
+- **Key Features**:
+  - Dynamic tool retrieval with `tools(_:)`.
+  - Tool caching with `cacheTools(_:_:)`.
+
+- **Example Use Case**:
+  Loading tools based on user-specific configurations or caching frequently used tools.
+
+```swift
+public protocol ToolProvider {
+    func tools(_ context: [String: String]) -> Array<MCPTool>?
+    func cacheTools(_ uuid: UUID, _ tools: Array<MCPTool>?)
+}
+```
+
+### How They Work Together
+
+- **URLProvider** ensures that file operations are performed on valid and accessible paths, providing a layer of security and consistency.
+- **ToolProvider** allows the Swagentic project to dynamically manage and use tools, enabling modularity and extensibility.
+- Both providers are integrated into the core logic, ensuring that tools can access the correct resources and perform their operations reliably.
+
 ## Usage
 
 To use this MCP server in your project, add it as a dependency in your `Package.swift`:
