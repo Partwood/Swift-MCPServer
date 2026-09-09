@@ -147,12 +147,39 @@ class Tool_FileInsert {
 
 // MARK: Write content
 extension Tool_FileInsert {
+   // Trivial case, file does not exist, just create
+   private func writeFile(_ serverInfo: ServerInfo,_ responseId: String, newData: Data,_ fileURL: URL) -> MCPResponse {
+      do {
+         FileManager.default.createFile(atPath: fileURL.path(), contents: nil)
+         
+         let originalHandle = try FileHandle(forWritingTo: fileURL)
+         defer {
+            try? originalHandle.close()
+         }
+         
+         // Write new data
+         try originalHandle.write(contentsOf: newData)
+      } catch {
+         let message = "Error inserting data into file:'\(fileURL.path())', error: \(error.localizedDescription)"
+         logError(message)
+         // Clean up file on error
+         try? FileManager.default.removeItem(at: fileURL)
+         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+      }
+      
+      return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path())'" ,serverInfo: serverInfo)
+   }
+   
+   /**
+    Basic logic...
+    Given a desination file, read original file up to insert point, write to temp, write insertion, write remainder
+    If the destination file does not exist, just write
+    */
    func insertDataIntoFile(_ serverInfo: ServerInfo,_ responseId: String,inPath: String,name:String, atOffset offset: Int, newData: Data) -> MCPResponse {
       if ( inPath.contains("%20") ) {
          logWarn("Invalid string!!!")
       }
       
-      let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
       let fileURL = FileUtils.fileURL(path: inPath,name)
 
       if ( fileURL.isDirectory ) {
@@ -160,6 +187,18 @@ extension Tool_FileInsert {
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
+
+      if !FileManager.default.fileExists(atPath: fileURL.path()) {
+         if offset != 0 {
+            let message = "Invalid offset for a file that does not exist '\(fileURL.path())'"
+            logError(message)
+            return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
+         }
+         
+         return writeFile(serverInfo, responseId, newData: newData, fileURL)
+      }
+      
+      let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 
       do {
          if !FileManager.default.fileExists(atPath: tempFileURL.path()) {
