@@ -67,6 +67,7 @@ struct FileSystemTool: Content {
 enum Tool_FileSystem_Error: LocalizedError {
    case path_is_directory(_ url: URL)
    case path_is_file(_ url: URL)
+   case invalid_pattern(_ pattern: String)
 }
 
 extension Tool_FileSystem_Error: CustomStringConvertible {
@@ -76,6 +77,8 @@ extension Tool_FileSystem_Error: CustomStringConvertible {
          return NSLocalizedString("Operation error: '\(url)' is a directory", comment: "Unexpected directory")
       case .path_is_file(let url):
          return NSLocalizedString("Operation error: '\(url)' is a file", comment: "Unexpected file")
+      case .invalid_pattern(let pattern):
+         return NSLocalizedString("Operation error: Invalid wildcard pattern '\(pattern)'", comment: "Invalid pattern")
       }
    }
 }
@@ -236,7 +239,27 @@ extension Tool_FileSystem {
 
 // MARK: Find file or directory
 extension Tool_FileSystem {
-   func find(_ serverInfo: ServerInfo,_ responseId: String,in rootPath: String,named name: String,directory: Bool) -> MCPResponse {
+   private func matchesWildcard(_ filename: String, pattern: String) throws -> Bool {
+      // Convert wildcard pattern to a regular expression
+      let regexPattern = pattern
+         .replacingOccurrences(of: ".", with: "\\.")
+         .replacingOccurrences(of: "*", with: ".*")
+      
+      do {
+         let regex = try NSRegularExpression(pattern: regexPattern)
+         let range = NSRange(location: 0, length: filename.utf16.count)
+         return regex.firstMatch(in: filename, options: [], range: range) != nil
+      } catch {
+         logError(error)
+         
+         let invalidPatternError = Tool_FileSystem_Error.invalid_pattern(pattern)
+         
+         logError(invalidPatternError)
+         throw invalidPatternError
+      }
+   }
+   
+   func find(_ serverInfo: ServerInfo,_ responseId: String,in rootPath: String,named pattern: String,directory: Bool) -> MCPResponse {
       let expandedRootPath = NSString(string: rootPath).expandingTildeInPath
       let fileManager = FileManager.default
       var foundFiles = [Text_Content]()
@@ -249,33 +272,36 @@ extension Tool_FileSystem {
          for item in contents {
             let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             
-            if item.lastPathComponent == name && ( directory == isDirectory ) {
-               // Found the file/directory directly in the root
-               foundFiles.append(Text_Content(text: "Found '" + name + "' at path: " + item.path))
+            if ( directory == isDirectory ) {
+               let matches: Bool = try matchesWildcard(item.lastPathComponent,pattern: pattern)
+               if ( matches ) {
+                  // Found the file/directory directly in the root
+                  foundFiles.append(Text_Content(text: "Found match to '" + pattern + "' at path: " + item.path))
+               }
             }
             
             if isDirectory {
                // Recursively search in subdirectories
-               let foundInSubdirs = try find(in: item.path, named: name,directory: directory)
+               let foundInSubdirs = try find(in: item.path, named: pattern,directory: directory)
                for foundItem in foundInSubdirs {
                   foundFiles.append(foundItem)
                }
             }
          }
       } catch {
-         let message = "Error searching for file:'\(name)', error:'\(error.localizedDescription)'"
+         let message = "Error searching for pattern:'\(pattern)', error:'\(error.localizedDescription)'"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
       }
       
       if foundFiles.isEmpty {
-         return MCPResponse.toolSuccess(id: responseId, text: "No file or directory named '" + name + "' found in '" + rootPath + "'", serverInfo: serverInfo)
+         return MCPResponse.toolSuccess(id: responseId, text: "No file or directory matching '" + pattern + "' found in '" + rootPath + "'", serverInfo: serverInfo)
       } else {
          return MCPResponse.toolSuccess(id: responseId, content: foundFiles, serverInfo: serverInfo)
       }
    }
 
-   private func find(in directoryPath: String, named name: String,directory: Bool) throws -> [Text_Content] {
+   private func find(in directoryPath: String, named pattern: String,directory: Bool) throws -> [Text_Content] {
       let fileManager = FileManager.default
       var foundItems = [Text_Content]()
       
@@ -286,19 +312,23 @@ extension Tool_FileSystem {
          for item in contents {
             let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             
-            if item.lastPathComponent == name && ( directory == isDirectory ) {
-               foundItems.append(Text_Content(text: "Found '" + name + "' at path: " + item.path))
+            if ( directory == isDirectory ) {
+               let matches: Bool = try matchesWildcard(item.lastPathComponent,pattern: pattern)
+               if ( matches ) {
+                  foundItems.append(Text_Content(text: "Found match to '" + pattern + "' at path: " + item.path))
+               }
             }
-            
+
             if isDirectory {
                // Recursively search in subdirectories
-               let foundInSubdirs = try find(in: item.path, named: name,directory: directory)
+               let foundInSubdirs = try find(in: item.path, named: pattern,directory: directory)
                for foundItem in foundInSubdirs {
                   foundItems.append(foundItem)
                }
             }
          }
       } catch {
+         logError(error)
          throw error
       }
       

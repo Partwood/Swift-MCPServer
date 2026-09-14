@@ -29,16 +29,16 @@ Given a path and name, create a directory with the given name in the path locati
 
 ## recursive_find_file
 ### Description
-Given a path and name, search in path and all its children reporting anywhere name is found that is a file
+Given a path and name, search in path and all its children recursively, reporting anywhere name is found that is a file. The name can be a regex pattern or an exact name.
 
 ### Arguments
 *path* The location on disk<br>
-*name* The file name<br>
+*name* The file name, can be a regex pattern or an exact name<br>
 
 ## recursive_find_dir
 ### Description
-Given a path and name, search in path and all its children reporting anywhere name is found that is a directory
+Given a path and name, search in path and all its children recursively, reporting anywhere name is found that is a directory. The name can be a regex pattern or an exact name.
 
 ### Arguments
 *path* The location on disk<br>
-*name* The directory name<br>
+*name* The directory name, can be a regex pattern or an exact name<br>
