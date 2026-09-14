@@ -16,7 +16,7 @@ enum FileAppendToolError: Error {
 struct FileAppendTool: Content {
    let name: String
    
-   // Helper method to load the description from FileAppendDescription.md
+   // Helper method to load the description from FileAppend.md
    static func loadDescription() -> String {
       let resourceName: String = "FileAppend"
       

@@ -11,8 +11,27 @@ import Vapor
 
 struct FileSystemTool: Content {
    let name: String
-   static let description = "Provides file system operations for creating directories, listing directory contents, and recursively finding a file or directory under a path."
    
+   // Helper method to load the description from FileSystem.md
+   static func loadDescription() -> String {
+      let resourceName: String = "FileSystem"
+      
+      do {
+         if let filePath = Bundle.module.url(forResource: resourceName, withExtension: "md") {
+            // Read your file data here
+            let textContent = try String(contentsOf: filePath, encoding: .utf8)
+            return textContent
+         } else {
+            throw FileAppendToolError.resource_not_found
+         }
+      } catch {
+         logError(error)
+         assertionFailure(error.localizedDescription)
+         // Fallback to a default description in case of an error
+         return "Default tool description"
+      }
+   }
+
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
          case listDirectory = "list"
@@ -72,7 +91,7 @@ class Tool_FileSystem {
       internalDescriptor =
       Tool(
          name: tool.name,
-         description: FileSystemTool.description,
+         description: FileSystemTool.loadDescription(),
          inputSchema: AnyCodable([
             "type": "object",
             "properties": [

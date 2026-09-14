@@ -33,7 +33,8 @@ let package = Package(
             resources: [
                .process("Resources/FileAppend.md"),
                .process("Resources/FileContent.md"),
-               .process("Resources/FileInsert.md")
+               .process("Resources/FileInsert.md"),
+               .process("Resources/FileSystem.md"),
             ]
         ),
         .testTarget(
