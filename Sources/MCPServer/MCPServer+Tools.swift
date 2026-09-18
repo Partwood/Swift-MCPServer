@@ -36,6 +36,12 @@ extension SwiftMCPServer {
       mcpTool = Tool_Git(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
+      mcpTool = Tool_WebSearch(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+
+      mcpTool = Tool_WebGet(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+
       self.internalTools = tools
    }
    

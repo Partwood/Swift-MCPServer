@@ -35,6 +35,8 @@ let package = Package(
                .process("Resources/FileContent.md"),
                .process("Resources/FileInsert.md"),
                .process("Resources/FileSystem.md"),
+               .process("Resources/WebSearch.md"),
+               .process("Resources/WebGet.md"),
             ]
         ),
         .testTarget(
