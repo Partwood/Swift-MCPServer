@@ -36,7 +36,8 @@ struct WebGetTool: Content {
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
-         case get = "get"
+         case get_html = "get_html"
+         case get_file = "get_file"
       }
       
       //let operation: Operation
@@ -129,6 +130,51 @@ extension Tool_WebGet {
       // 4. Safely pull out and return the results directly
       return container.value
    }
+   
+   /// Download a file from a given URL and save it to disk.
+   /// - Parameters:
+   ///   - url: The URL of the file to download.
+   ///   - path: The path where the file should be saved.
+   /// - Returns: The path where the file was saved.
+   func downloadFile(url: String, path: String) throws -> String {
+      guard let downloadURL = URL(string: url) else {
+         throw URLError.invalid(url)
+      }
+      
+      let semaphore = DispatchSemaphore(value: 0)
+      let container = SendableBox()
+      
+      // Extract the file name from the URL
+      let fileName = downloadURL.lastPathComponent
+      
+      URLSession.shared.dataTask(with: downloadURL) { data, response, error in
+         defer { semaphore.signal() }
+         
+         guard let data = data, error == nil else {
+            logError("Failed to download file: \(error?.localizedDescription ?? "Unknown error")")
+            return
+         }
+         
+         let filePath = path + fileName
+         
+         do {
+            try data.write(to: URL(fileURLWithPath: filePath))
+            container.value = filePath
+         } catch {
+            logError("Failed to write file to disk: \(error.localizedDescription)")
+         }
+      }.resume()
+      
+      semaphore.wait()
+      
+      guard !container.value.isEmpty else {
+         throw URLError.no_content(downloadURL)
+      }
+      
+      container.value = "The file was downloaded and saved to: \(path + fileName)"
+      
+      return container.value
+   }
 }
 
 extension Tool_WebGet {
@@ -136,14 +182,19 @@ extension Tool_WebGet {
                                 path: String,
                                 url: String) -> MCPResponse {
       do {
-         let result: String = try get(path: path,url: url)
-
-         let value = Text_Content(text: result)
+         let result: String
          
-         return MCPResponse.toolSuccess(id: responseId, content: [value],serverInfo: serverInfo)
+         switch operation {
+         case .get_html:
+            result = try get(path: path, url: url)
+         case .get_file:
+            result = try downloadFile(url: url, path: path)
+         }
+         let value = Text_Content(text: result)
+         return MCPResponse.toolSuccess(id: responseId, content: [value], serverInfo: serverInfo)
       } catch {
          logError(error)
-         return MCPResponse.toolError(id: responseId, message: error.localizedDescription,serverInfo: serverInfo)
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
    }
 }
