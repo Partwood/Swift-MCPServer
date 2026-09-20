@@ -94,7 +94,7 @@ extension Tool_WebGet {
       var value: String = ""
    }
    
-   func get(url: String) -> String {
+   func get(path: String,url: String) throws -> String {
       guard let getURL = URL(string: url) else {
          return ""
       }
@@ -120,6 +120,11 @@ extension Tool_WebGet {
       
       // 3. HARD BLOCK: Execution freezes here, waiting for the background network task
       semaphore.wait()
+
+      // Now write the content to a file, and return that
+      let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".html",data: container.value)
+      
+      container.value = "The content of the url can be found in this file:"+tempFile
       
       // 4. Safely pull out and return the results directly
       return container.value
@@ -127,11 +132,19 @@ extension Tool_WebGet {
 }
 
 extension Tool_WebGet {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: WebGetTool.Input.Operation,_ url: String) -> MCPResponse {
-      let result: String = get(url: url)
-      let value = Text_Content(text: result)
-      
-      return MCPResponse.toolSuccess(id: responseId, content: [value],serverInfo: serverInfo)
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: WebGetTool.Input.Operation,
+                                path: String,
+                                url: String) -> MCPResponse {
+      do {
+         let result: String = try get(path: path,url: url)
+
+         let value = Text_Content(text: result)
+         
+         return MCPResponse.toolSuccess(id: responseId, content: [value],serverInfo: serverInfo)
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription,serverInfo: serverInfo)
+      }
    }
 }
 
@@ -151,6 +164,7 @@ extension Tool_WebGet: MCPTool {
    func handleOperation(_ serverInfo: ServerInfo, _ urlProvider: (any URLProvider)?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inUrl: String = arguments["url"] as? String ?? "."
+      let inPath: String = FileManager.default.temporaryDirectory.path()//arguments["path"] as? String ?? "."
       
       let possibleOperation = WebGetTool.Input.Operation(rawValue: inOperation)
       
@@ -161,9 +175,16 @@ extension Tool_WebGet: MCPTool {
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
-      debug("operation:\(operation) url:\(inUrl)")
+      guard let accessiblePath = FileUtils.accessibleURL(urlProvider,inPath) else {
+         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
+         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
+         logError(message)
+         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+      }
       
-      let result = handleOperation(serverInfo,responseId,arguments,operation,inUrl)
+      debug("operation:\(operation) url:\(inUrl) accessiblePath:\(accessiblePath)")
+      
+      let result = handleOperation(serverInfo,responseId,arguments,operation,path: accessiblePath.path(),url: inUrl)
       return result
    }
 }

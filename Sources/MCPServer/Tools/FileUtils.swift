@@ -84,7 +84,7 @@ class FileUtils {
       let fileURL = fileURL(path: path,name)
       
       if ( fileURL.isDirectory ) {
-         let error = Tool_FileContent_Error.path_is_directory(fileURL)
+         let error = FileIOError.path_is_directory(fileURL)
          logError(error)
          throw error
       }
@@ -361,4 +361,40 @@ extension FileUtils {
 //      
 //      return Result<Int,FindError>.success(currentByteOffset)
 //   }
+}
+
+// MARK: Write
+extension FileUtils {
+   // Helper function to write data to a temporary file and return its path
+   public func writeToTempFile(path: String,ext: String,data: String) throws -> String {
+      if ( path.contains("%20") ) {
+         logWarn("Invalid string!!!")
+      }
+      
+      let fileName = ProcessInfo.processInfo.globallyUniqueString + ext
+      let fileURL = FileUtils.fileURL(path: path, fileName)
+      
+      if ( fileURL.isDirectory ) {
+         let error = Tool_FileAppend_Error.path_is_directory(fileURL)
+         logError(error.description)
+         throw error
+         //return //MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
+      }
+      
+      //let fileString = fileURL.path(percentEncoded: false)
+
+      //let tempDirectory = FileManager.default.temporaryDirectory
+      //let fileName = ProcessInfo.processInfo.globallyUniqueString + ".html"
+      //let filePath = tempDirectory.appendingPathComponent(fileName).path
+      
+      do {
+         try data.write(to: fileURL, atomically: true, encoding: .utf8)
+         return fileURL.path()
+      } catch {
+         logError("Failed to write to temporary file: \(error.localizedDescription)")
+         logError(error)
+         throw error
+         //return ""
+      }
+   }
 }

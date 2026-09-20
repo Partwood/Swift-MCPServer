@@ -95,7 +95,7 @@ extension Tool_WebSearch {
       var value: String = ""
    }
    
-   func search(query: String) -> String {
+   func search(path: String,query: String) throws -> String {
       let base = "https://html.duckduckgo.com/html/"//"https://duckduckgo.com/"
       let searchURLString = "\(base)?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
       guard let searchURL = URL(string: searchURLString) else {
@@ -123,65 +123,30 @@ extension Tool_WebSearch {
       
       // 3. HARD BLOCK: Execution freezes here, waiting for the background network task
       semaphore.wait()
-      
+
+      // Now write the content to a file, and return that
+      let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".html",data: container.value)
+      container.value = "The results of the search can be found in this file:"+tempFile
+
       // 4. Safely pull out and return the results directly
       return container.value
    }
-
-//   func search(query: String, limit: Int = 10) -> [URL] {
-//      guard limit > 0 else { return [] }
-//      
-//      // Use DuckDuckGo API for web search
-//      let searchURLString = "https://api.duckduckgo.com/?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&format=json"
-//      guard let searchURL = URL(string: searchURLString) else {
-//         return []
-//      }
-//      
-//      let semaphore = DispatchSemaphore(value: 0)
-//      
-//      //var urls: [URL] = []
-//      
-//      DispatchQueue.global(qos: .userInitiated).async {
-//         var urls: [URL] = []
-//         
-//         do {
-//            let (data, _) = try await URLSession.shared.data(from: searchURL)
-//            
-//            do {
-//               if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-//                  let results = json["results"] as? [[String: Any]] {
-//                  for result in results.prefix(limit) {
-//                     if let firstURL = result["firsturl"] as? String, let url = URL(string: firstURL) {
-//                        urls.append(url)
-//                     } else {
-//                        logError("No firsturl")
-//                     }
-//                  }
-//               } else {
-//                  logError("No results and no error")
-//               }
-//            } catch {
-//               logError("Error parsing JSON: \(error.localizedDescription)")
-//            }
-//         } catch {
-//            logError(error)
-//         }
-//         
-//         semaphore.signal()
-//      }
-//      
-//      semaphore.wait()
-//      
-//      return urls
-//   }
 }
 
 extension Tool_WebSearch {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: WebSearchTool.Input.Operation,_ query: String) -> MCPResponse {
-      let result: String = search(query: query)
-      let value = Text_Content(text: result)
-      
-      return MCPResponse.toolSuccess(id: responseId, content: [value],serverInfo: serverInfo)
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: WebSearchTool.Input.Operation,
+                                path: String,
+                                query: String) -> MCPResponse {
+      do {
+         let result: String = try search(path: path,query: query)
+         
+         let value = Text_Content(text: result)
+         
+         return MCPResponse.toolSuccess(id: responseId, content: [value],serverInfo: serverInfo)
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription,serverInfo: serverInfo)
+      }
    }
 }
 
@@ -201,6 +166,7 @@ extension Tool_WebSearch: MCPTool {
    func handleOperation(_ serverInfo: ServerInfo, _ urlProvider: (any URLProvider)?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inQuery: String = arguments["query"] as? String ?? "."
+      let inPath: String = FileManager.default.temporaryDirectory.path()//arguments["path"] as? String ?? "."
       
       let possibleOperation = WebSearchTool.Input.Operation(rawValue: inOperation)
       
@@ -211,87 +177,16 @@ extension Tool_WebSearch: MCPTool {
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
-      debug("operation:\(operation) path:\(inQuery)")
+      guard let accessiblePath = FileUtils.accessibleURL(urlProvider,inPath) else {
+         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
+         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
+         logError(message)
+         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+      }
       
-      let result = handleOperation(serverInfo,responseId,arguments,operation,inQuery)
+      debug("operation:\(operation) query:\(inQuery) accessiblePath:\(accessiblePath)")
+      
+      let result = handleOperation(serverInfo,responseId,arguments,operation,path: accessiblePath.path(),query: inQuery)
       return result
    }
 }
-
-
-//class SerialQueryPipeline: @unchecked Sendable {
-//   private var continuation: AsyncStream<String>.Continuation?
-//   private var finalResults: [URL] = []
-//   
-//   // Semaphores are the standard low-level tool for synchronous blocking
-//   private let semaphore = DispatchSemaphore(value: 0)
-//   
-//   init() {
-//      let (stream, continuation) = AsyncStream<String>.makeStream()
-//      self.continuation = continuation
-//      
-//      Task { [weak self] in
-//         for await query in stream {
-//            guard let self = self else { break }
-//            let urls = await self.fetchSearchWithTimeout(query: query)
-//            self.consumeResultsSerially(urls)
-//         }
-//         // Signal the semaphore when the background queue is completely empty
-//         self?.semaphore.signal()
-//      }
-//   }
-//   
-//   func enqueueQuery(_ query: String) {
-//      continuation?.yield(query)
-//   }
-//   
-//   /// Synchronously blocks the calling thread and returns results directly
-//   func finishPipeline() -> [URL] {
-//      continuation?.finish()
-//      
-//      // HARD BLOCK: Stop execution right here until .signal() is hit
-//      semaphore.wait()
-//      
-//      return finalResults
-//   }
-//   
-//   private func fetchSearchWithTimeout(query: String) async -> [URL] {
-//      do { return try await performNetworkSearch(query: query) } catch { return [] }
-//   }
-//   
-//   private func consumeResultsSerially(_ urls: [URL]) {
-//      self.finalResults.append(contentsOf: urls)
-//   }
-//
-//   private func performNetworkSearch(query: String) async throws -> [URL] {
-//      // 1. Prepare your API endpoint
-//      guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-//            let searchURL = URL(string: "https://duckduckgo.com\(encodedQuery)&format=json") else {
-//         throw URLError(.badURL)
-//      }
-//      
-//      // 2. THE NON-BLOCKING SUSPENSION POINT:
-//      // This line uses Apple's native async/await URLSession engine.
-//      // When Swift hits 'await', it completely pauses this specific function's memory state,
-//      // unloads it from the thread, and hands the physical CPU thread back to the OS.
-//      let (data, _) = try await URLSession.shared.data(from: searchURL)
-//      
-//      // While the network hardware is waiting for bytes from the web server,
-//      // ZERO CPU threads are being frozen or wasted by this function.
-//      
-//      // 3. Resumes naturally on an available background thread once data arrives
-//      guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-//            let results = json["RelatedTopics"] as? [[String: Any]] else {
-//         return []
-//      }
-//      
-//      var urls: [URL] = []
-//      for result in results {
-//         if let firstURL = result["FirstURL"] as? String, let url = URL(string: firstURL) {
-//            urls.append(url)
-//         }
-//      }
-//      
-//      return urls
-//   }
-//}

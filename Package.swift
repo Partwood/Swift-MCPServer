@@ -32,7 +32,9 @@ let package = Package(
             ],
             resources: [
                .process("Resources/FileAppend.md"),
-               .process("Resources/FileContent.md"),
+               .process("Resources/FileFindContent.md"),
+               .process("Resources/FileReadBytes.md"),
+               .process("Resources/FileReadLines.md"),
                .process("Resources/FileInsert.md"),
                .process("Resources/FileSystem.md"),
                .process("Resources/WebSearch.md"),
