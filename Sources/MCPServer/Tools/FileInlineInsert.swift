@@ -1,5 +1,5 @@
 //
-//  FileInsert.swift
+//  FileInlineInsert.swift
 //  MCPServer
 //
 //  Copyright © 2026 JVSherwood. All rights reserved.
@@ -9,16 +9,12 @@
 
 import Vapor
 
-enum FileInsertToolError: Error {
-   case resource_not_found
-}
-
-struct FileInsertTool: Content {
+struct FileInlineInsertTool: Content {
    let name: String
    
-   // Helper method to load the description from FileInsertDescription.md
+   // Helper method to load the description from <resourceName>.md
    static func loadDescription() -> String {
-      let resourceName: String = "FileInsert"
+      let resourceName: String = "FileInlineInsert"
       
       do {
          if let filePath = Bundle.module.url(forResource: resourceName, withExtension: "md") {
@@ -26,7 +22,8 @@ struct FileInsertTool: Content {
             let textContent = try String(contentsOf: filePath, encoding: .utf8)
             return textContent
          } else {
-            throw FileInsertToolError.resource_not_found
+            assertionFailure(ResourceError.resource_not_found.localizedDescription)
+            throw ResourceError.resource_not_found
          }
       } catch {
          logError(error)
@@ -38,12 +35,11 @@ struct FileInsertTool: Content {
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
-         case insertContent = "insert"
+         case insertContent = "inline_insert"
       }
 
       enum Arguments: String, Codable, CaseIterable {
-         case offset_in_bytes = "offset_in_bytes"
-         case line_offset = "line_offset"
+         case offset_in_bytes = "offset"
          case content = "content"
          case name = "name"
          case path = "path"
@@ -56,45 +52,29 @@ struct FileInsertTool: Content {
    }
    
    init(serverName: String) {
-      name = "mcp_"+serverName+"_FileInsert"
-   }
-}
-
-enum Tool_FileInsert_Error: LocalizedError {
-   case path_is_directory(_ url: URL)
-   case path_is_file(_ url: URL)
-}
-
-extension Tool_FileInsert_Error: CustomStringConvertible {
-   var description: String {
-      switch(self) {
-      case .path_is_directory(let url):
-         return NSLocalizedString("Operation error: '\(url)' is a directory", comment: "Unexpected directory")
-      case .path_is_file(let url):
-         return NSLocalizedString("Operation error: '\(url)' is a file", comment: "Unexpected file")
-      }
+      name = "mcp_"+serverName+"_FileInlineInsert"
    }
 }
 
 public
 final
-class Tool_FileInsert {
+class Tool_FileInlineInsert {
    let internalDescriptor: Tool
-   let tool: FileInsertTool
+   let tool: FileInlineInsertTool
    
    public init(serverName: String) {
-      self.tool = FileInsertTool(serverName: serverName)
+      self.tool = FileInlineInsertTool(serverName: serverName)
       
       internalDescriptor =
       Tool(
          name: tool.name,
-         description: FileInsertTool.loadDescription(),
+         description: FileInlineInsertTool.loadDescription(),
          inputSchema: AnyCodable([
             "type": "object",
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+FileInsertTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "One of the following values:"+FileInlineInsertTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
                ],
                "path": [
                   "type": "string",
@@ -108,45 +88,19 @@ class Tool_FileInsert {
                   "type": "string",
                   "description": "The content to be written"
                ],
-               "line_offset": [
-                  "type": "number",
-                  "description": "The offset in lines as an integer"
-               ],
-               "offset_in_bytes": [
+               "offset": [
                   "type": "number",
                   "description": "The offset in bytes as an integer"
                ],
             ],
-            "required": ["operation", "path", "name", "content"]
+            "required": ["operation", "path", "name", "content", "offset"]
          ])
       )
-   }
-   
-   func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> URL? {
-      guard let urlProvider else {
-         debug("No urlProvider")
-         return nil
-      }
-      let urls = urlProvider.urls
-      if urls.isEmpty {
-         debug("No urlProvider.urls")
-         return nil
-      }
-      
-      let first = urls.first(where: { url in
-         debug("url:\(url.path)\npath:\(path)")
-         
-         let expandedPath = NSString(string: path).expandingTildeInPath
-         let desiredURL = URL(fileURLWithPath: expandedPath)
-         return desiredURL.isContained(in: url)
-      })
-      
-      return first
    }
 }
 
 // MARK: Write content
-extension Tool_FileInsert {
+extension Tool_FileInlineInsert {
    // Trivial case, file does not exist, just create
    private func writeFile(_ serverInfo: ServerInfo,_ responseId: String, newData: Data,_ fileURL: URL) -> MCPResponse {
       do {
@@ -183,7 +137,7 @@ extension Tool_FileInsert {
       let fileURL = FileUtils.fileURL(path: inPath,name)
 
       if ( fileURL.isDirectory ) {
-         let error = Tool_FileInsert_Error.path_is_directory(fileURL)
+         let error = FileIOError.path_is_directory(fileURL)
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
@@ -248,7 +202,7 @@ extension Tool_FileInsert {
 }
 
 // MARK: Offset
-extension Tool_FileInsert {
+extension Tool_FileInlineInsert {
    public struct OffsetSuccess {
       public var offset: Int
    }
@@ -325,32 +279,8 @@ extension Tool_FileInsert {
             let response = MCPResponse.toolError(id: responseId, message: "offset is not an integer",serverInfo: serverInfo)
             return Result.failure(OffsetError.mcpError(response: response))
          }
-      } else if let _ = arguments["line_offset"] {
-         if let integerValue = asInteger(arguments, "line_offset") {
-            // line offset provided, convert to bytes
-            if ( integerValue == 0 ) {
-               return Result.success(OffsetSuccess(offset: 0))
-            } else if ( integerValue < 0 ) {
-               let response = MCPResponse.toolError(id: responseId, message: "line_offset is not a positive integer",serverInfo: serverInfo)
-               return Result.failure(OffsetError.mcpError(response: response))
-            } else {
-               let result = findByteOffset(serverInfo,responseId,at: path,name: name,integerValue)
-               switch(result) {
-               case .success(let value):
-                  return Result.success(OffsetSuccess(offset: value))
-               case .failure(let someError):
-                  let message = "line_offset error:\(someError.localizedDescription)"
-                  logError(message)
-                  let response = MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-                  return Result.failure(OffsetError.mcpError(response: response))
-               }
-            }
-         } else {
-            let response = MCPResponse.toolError(id: responseId, message: "line_offset is not an integer",serverInfo: serverInfo)
-            return Result.failure(OffsetError.mcpError(response: response))
-         }
       } else {
-         let response = MCPResponse.toolError(id: responseId, message: "offset or line_offset argument not provided",serverInfo: serverInfo)
+         let response = MCPResponse.toolError(id: responseId, message: "offset argument not provided",serverInfo: serverInfo)
          return Result.failure(OffsetError.mcpError(response: response))
       }
    }
@@ -368,8 +298,8 @@ extension Tool_FileInsert {
    }
 }
 
-extension Tool_FileInsert {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileInsertTool.Input.Operation,_ whichPath: String) -> MCPResponse {
+extension Tool_FileInlineInsert {
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileInlineInsertTool.Input.Operation,_ whichPath: String) -> MCPResponse {
       let fileName = arguments["name"] as? String ?? ""
       guard !fileName.isEmpty else {
          return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
@@ -402,7 +332,7 @@ extension Tool_FileInsert {
 }
 
 // MARK: MCPTool
-extension Tool_FileInsert: MCPTool {
+extension Tool_FileInlineInsert: MCPTool {
    public var name: String { get { return self.tool.name } }
    public var descriptor: Tool { get { return self.internalDescriptor } }
    
@@ -414,22 +344,20 @@ extension Tool_FileInsert: MCPTool {
       // Does nothing
    }
    
-   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      //debug("req:\(req.method)")
-      
+   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inPath: String = arguments["path"] as? String ?? "."
       
-      let possibleOperation = FileInsertTool.Input.Operation(rawValue: inOperation)
+      let possibleOperation = FileInlineInsertTool.Input.Operation(rawValue: inOperation)
       
       guard let operation = possibleOperation else {
-         let operations = FileInsertTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
+         let operations = FileInlineInsertTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
          let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
-      guard let url = accessibleURL(urlProvider,inPath) else {
+      guard let url = FileUtils.accessibleURL(urlProvider,inPath) else {
          let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
          let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
          logError(message)

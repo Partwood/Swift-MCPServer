@@ -3,7 +3,7 @@ Provides web search ability for querying duck duck go and getting back html form
 
 ## query
 ### Description
-Given a query, performs a duck duck go search and returns html content. Uses https://duckduckgo.com/?q=<query><br>
+Given a query, performs a duck duck go search and returns html content. Uses https://html.duckduckgo.com/html/?q=<query><br>
 
 ### Arguments
 *query* The query to perform<br>
