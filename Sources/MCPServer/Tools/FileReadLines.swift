@@ -21,6 +21,7 @@ struct FileReadLinesTool: Content {
             let textContent = try String(contentsOf: filePath, encoding: .utf8)
             return textContent
          } else {
+            assertionFailure(ResourceError.resource_not_found.localizedDescription)
             throw ResourceError.resource_not_found
          }
       } catch {

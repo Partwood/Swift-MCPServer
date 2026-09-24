@@ -188,6 +188,7 @@ struct MCPResponse: Content {
       }
    }
    
+   public
    var isToolError: Bool {
       if let result = self.result,
          let mappedValues = result.value as? [String: AnyCodable] {

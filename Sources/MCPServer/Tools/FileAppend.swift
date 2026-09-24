@@ -144,13 +144,22 @@ extension Tool_FileAppend {
 
       let fileURL = FileUtils.fileURL(path: path,name)
       
-      if ( fileURL.isDirectory ) {
+      let fileString = fileURL.path(percentEncoded: false)
+      
+      let isDirectory: Bool
+      do {
+         isDirectory = try fileURL.isDirectory()
+      } catch {
+         let message = "Error appending to file '\(fileString)', error: \(error.localizedDescription)"
+         logError(message)
+         return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
+      }
+      
+      if ( isDirectory ) {
          let error = Tool_FileAppend_Error.path_is_directory(fileURL)
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
-
-      let fileString = fileURL.path(percentEncoded: false)
 
       do {
          // Open the file in append mode

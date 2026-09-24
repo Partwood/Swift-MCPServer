@@ -47,17 +47,19 @@ extension URL {
       return result
    }
 
-   var isDirectory: Bool {
-      get {
-         do {
-            let resourceValues = try self.resourceValues(forKeys: [.isDirectoryKey])
-            if resourceValues.isDirectory == true {
-               return true
-            } else {
-               return false
-            }
-         } catch {
-            logError("Error reading URL: \(error.localizedDescription)")
+   func isDirectory() throws -> Bool {
+      do {
+         let resourceValues = try self.resourceValues(forKeys: [.isDirectoryKey])
+         if resourceValues.isDirectory == true {
+            return true
+         } else {
+            return false
+         }
+      } catch {
+         if error.localizedDescription.contains("there is no such file") {
+            throw URLError.does_not_exist(self)
+         } else {
+            logError(error)
             return false
          }
       }

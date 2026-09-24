@@ -136,7 +136,16 @@ extension Tool_FileLineInsert {
       
       let fileURL = FileUtils.fileURL(path: inPath,name)
 
-      if ( fileURL.isDirectory ) {
+      let isDirectory: Bool
+      do {
+         isDirectory = try fileURL.isDirectory()
+      } catch {
+         let message = "Error inserting data into file:'\(fileURL.path())', error: \(error.localizedDescription)"
+         logError(message)
+         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+      }
+      
+      if ( isDirectory ) {
          let error = FileIOError.path_is_directory(fileURL)
          logError(error.description)
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
