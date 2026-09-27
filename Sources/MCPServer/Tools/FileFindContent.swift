@@ -83,7 +83,7 @@ class Tool_FileFindContent {
                ],
                "find": [
                   "type": "string",
-                  "description": "The string to find in a file"
+                  "description": "The regex pattern to find in the file content"
                ]
             ],
             "required": ["operation", "path", "name", "find"]
@@ -100,7 +100,35 @@ extension Tool_FileFindContent {
       let byteOffset: Int
    }
    
-   private func find(string target: String,content: String) -> [SearchResult] {
+   func searchWithRegex(regex: NSRegularExpression, in content: String, caseInsensitive: Bool = false) -> [Range<String.Index>] {
+      // Perform the search.
+      let matches = regex.matches(
+         in: content,
+         range: NSRange(content.startIndex..., in: content)
+      )
+      
+      // Extract the matched substrings.
+      let matchedRanges: [Range<String.Index>] = matches.compactMap({ match in
+         let range = match.range(at: 0)
+         
+         if let stringRange = Range(range, in: content) {
+            return stringRange
+         }
+         
+         return nil
+      })
+      
+      return matchedRanges
+   }
+   
+   private func find(string pattern: String,content: String,caseInsensitive: Bool = true) -> [SearchResult] {
+      // Convert the input pattern to a regular expression.
+      // This allows the caller to use wildcards like `*.` or regex variants like `a{2,}?`.
+      let regex = try! NSRegularExpression (
+         pattern: pattern,
+         options: caseInsensitive ? [.caseInsensitive, .anchorsMatchLines] : [.anchorsMatchLines]
+      )
+      
       var results: [SearchResult] = []
       let lines = content.components(separatedBy: "\n")
       var currentByteOffset = 0
@@ -111,13 +139,12 @@ extension Tool_FileFindContent {
          let lineNumber = lineIdx + 1
          
          // Find all occurrences within the current line
-         var searchRange = line.startIndex..<line.endIndex
-         while let range = line.range(of: target, options: [], range: searchRange) {
-            
-            // 1. Character distance from start of file
+         let ranges = searchWithRegex(regex: regex, in: line)
+         ranges.forEach({ range in
+            // Character distance from start of file
             let charDistance = content.distance(from: content.startIndex, to: range.lowerBound)
             
-            // 2. Byte offset (UTF-8)
+            // Byte offset (UTF-8)
             let substring = content[..<range.lowerBound]
             let byteOffset = substring.utf8.count
             
@@ -126,10 +153,7 @@ extension Tool_FileFindContent {
                characterOffset: charDistance,
                byteOffset: byteOffset
             ))
-            
-            // Advance search range to find subsequent occurrences on the same line
-            searchRange = range.upperBound..<line.endIndex
-         }
+         })
          
          // Add lengths of line + "\n" to offsets for the next iteration
          let lineWithNewline = line + "\n"
@@ -163,68 +187,22 @@ extension Tool_FileFindContent {
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
    }
-   
-//   func findByteOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,_ lineOffset: Int) -> Result<Int,FileIOError> {
-//      if ( lineOffset == 0 ) {
-//         return Result<Int,FileIOError>.success(0)
-//      }
-//      
-//      let FileFindContentString: String
-//      do {
-//         if let content = try FileUtils.readFileToString(atPath: inPath,name: name) {
-//            FileFindContentString = content
-//         } else {
-//            logError("Read error path:\(inPath) name:\(name)")
-//            return Result<Int,FileIOError>.failure(FileIOError.read_error(FileUtils.fileURL(path: inPath, name)))
-//         }
-//      } catch {
-//         logError(error)
-//         return Result<Int,FileIOError>.failure(FileIOError.read_error(FileUtils.fileURL(path: inPath, name)))
-//      }
-//      
-//      // File read, determine byte offset
-//      let lines = FileFindContentString.components(separatedBy: "\n")
-//      
-//      if ( lines.count <= lineOffset ) {
-//         let byteOffset = FileFindContentString.utf8.count
-//         return Result<Int,FileIOError>.success(byteOffset)
-//      }
-//      
-//      var currentByteOffset = 0
-//      
-//      var adjustedOffset = lineOffset+1
-//      for line in lines {
-//         adjustedOffset -= 1
-//         if ( adjustedOffset <= 0 ) {
-//            logError("Read error at offset:\(adjustedOffset) path:\(inPath) name:\(name)")
-//            return Result<Int,FileIOError>.success(currentByteOffset)
-//         }
-//         
-//         let lineWithNewline = line + "\n"
-//         currentByteOffset += lineWithNewline.utf8.count
-//      }
-//      
-//      return Result<Int,FileIOError>.success(currentByteOffset)
-//   }
 }
 
 extension Tool_FileFindContent {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileFindContentTool.Input.Operation,_ whichPath: String) -> MCPResponse {
-      let fileName = arguments["name"] as? String ?? ""
-      guard !fileName.isEmpty else {
-         return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: FileFindContentTool.Input.Operation,_ whichPath: String) -> MCPResponse {
+      let fileName: String
+      let find: String
+      do {
+         fileName = try toolArguments.asString("name", allowEmpty: false)
+         find = try toolArguments.asString("find", allowEmpty: false)
+      } catch {
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
       
       switch operation {
       case .findContent:
-         guard let content = arguments["find"] as? String,
-               !content.isEmpty else {
-            let message = "find not provided for operation:'\(operation.rawValue)'"
-            logWarn(message)
-            return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
-         }
-         
-         return findContent(serverInfo,responseId,at: whichPath,name: fileName,find: content)
+         return findContent(serverInfo,responseId,at: whichPath,name: fileName,find: find)
       }
    }
 }
@@ -243,30 +221,16 @@ extension Tool_FileFindContent: MCPTool {
    }
    
    public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
-      let inPath: String = arguments["path"] as? String ?? "."
+      let toolArguments = ToolArguments(arguments: arguments)
       
-      let possibleOperation = FileFindContentTool.Input.Operation(rawValue: inOperation)
+      let operation = try toolArguments.enumFromString("operation", as: FileFindContentTool.Input.Operation.self)
+      let accessibleURL = try toolArguments.asAccessibleURL(urlProvider, "path")
       
-      guard let operation = possibleOperation else {
-         let operations = FileFindContentTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-         let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
+      debug("operation:\(operation) path:\(accessibleURL.path)")
       
-      guard let url = FileUtils.accessibleURL(urlProvider,inPath) else {
-         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
-         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      debug("operation:\(operation) path:\(inPath)")
-      
-      _ = url.startAccessingSecurityScopedResource()
-      let result = handleOperation(serverInfo,responseId,arguments,operation,inPath)
-      url.stopAccessingSecurityScopedResource()
+      _ = accessibleURL.rootURL.startAccessingSecurityScopedResource()
+      let result = handleOperation(serverInfo, responseId, toolArguments, operation, accessibleURL.path)
+      accessibleURL.rootURL.stopAccessingSecurityScopedResource()
       return result
    }
 }

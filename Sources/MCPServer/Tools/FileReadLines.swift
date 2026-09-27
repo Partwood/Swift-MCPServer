@@ -38,8 +38,8 @@ struct FileReadLinesTool: Content {
       }
 
       enum Arguments: String, Codable, CaseIterable {
-         case length_in_bytes = "length"
-         case offset_in_bytes = "offset"
+         case length = "length"
+         case offset = "offset"
          case name = "name"
          case path = "path"
       }
@@ -89,7 +89,7 @@ class Tool_FileReadLines {
                ],
                "length": [
                   "type": "number",
-                  "description": "The integer number of lines to read from the provided offset value"
+                  "description": "The integer number of lines to read from the provided offset value. Should not exceed 10"
                ],
             ],
             "required": ["operation", "path", "name", "offset", "length"]
@@ -158,9 +158,9 @@ extension Tool_FileReadLines {
       case mcpError(response: MCPResponse)
    }
    
-   func findByteOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,_ lineOffset: Int) -> Result<Int,FileIOError> {
+   func findByteOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,_ lineOffset: Int) throws -> Int {
       if ( lineOffset == 0 ) {
-         return Result<Int,FileIOError>.success(0)
+         return 0
       }
       
       let FileFindContentString: String
@@ -168,20 +168,20 @@ extension Tool_FileReadLines {
          if let content = try FileUtils.readFileToString(atPath: inPath,name: name) {
             FileFindContentString = content
          } else {
-            logError("Read error path:\(inPath) name:\(name)")
-            return Result<Int,FileIOError>.failure(FileIOError.read_error(FileUtils.fileURL(path: inPath, name)))
+            throw FileIOError.read_error(FileUtils.fileURL(path: inPath, name))
          }
       } catch {
          logError(error)
-         return Result<Int,FileIOError>.failure(FileIOError.read_error(FileUtils.fileURL(path: inPath, name)))
+         throw error
       }
+      
+      let maxByteOffset = FileFindContentString.utf8.count
       
       // File read, determine byte offset
       let lines = FileFindContentString.components(separatedBy: "\n")
       
       if ( lines.count <= lineOffset ) {
-         let byteOffset = FileFindContentString.utf8.count
-         return Result<Int,FileIOError>.success(byteOffset)
+         return maxByteOffset-1
       }
       
       var currentByteOffset = 0
@@ -190,89 +190,54 @@ extension Tool_FileReadLines {
       for line in lines {
          adjustedOffset -= 1
          if ( adjustedOffset <= 0 ) {
-            logError("Read error at offset:\(adjustedOffset) path:\(inPath) name:\(name)")
-            return Result<Int,FileIOError>.success(currentByteOffset)
+            // Not a read error, we've reached the correct offset.
+            return currentByteOffset
          }
          
          let lineWithNewline = line + "\n"
          currentByteOffset += lineWithNewline.utf8.count
       }
       
-      return Result<Int,FileIOError>.success(currentByteOffset)
+      if ( currentByteOffset >= maxByteOffset) {
+         return maxByteOffset-1
+      }
+      
+      return currentByteOffset
    }
 
    // Ensure that the offset value is > 0 and an integer, if using line_offset must have same constraints and be converted
-   public func getOffset(_ serverInfo: ServerInfo,_ responseId: String,_ arguments: [String : Any],path: String,name:String) -> Result<OffsetSuccess, OffsetError> {
-      if let _ = arguments["offset"] {
-         if let integerValue = asInteger(arguments, "offset") {
-            // line offset provided, convert to bytes
-            if ( integerValue == 0 ) {
-               return Result.success(OffsetSuccess(offset: 0))
-            } else if ( integerValue < 0 ) {
-               let response = MCPResponse.toolError(id: responseId, message: "offset is not a positive integer",serverInfo: serverInfo)
-               return Result.failure(OffsetError.mcpError(response: response))
-            } else {
-               let result = findByteOffset(serverInfo,responseId,at: path,name: name,integerValue)
-               switch(result) {
-               case .success(let value):
-                  return Result.success(OffsetSuccess(offset: value))
-               case .failure(let someError):
-                  let message = "offset error:\(someError.localizedDescription)"
-                  logError(message)
-                  let response = MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-                  return Result.failure(OffsetError.mcpError(response: response))
-               }
-            }
-         } else {
-            let response = MCPResponse.toolError(id: responseId, message: "offset is not an integer",serverInfo: serverInfo)
-            return Result.failure(OffsetError.mcpError(response: response))
-         }
+   public func getByteOffset(_ serverInfo: ServerInfo,_ responseId: String,_ lineOffset: Int,path: String,name:String) throws -> Int {
+      if ( lineOffset == 0 ) {
+         return 0
+      } else if ( lineOffset < 0 ) {
+         let message = "offset is not a positive integer"
+         throw ToolArgumentError.invalid_integer(message: message)
       } else {
-         let response = MCPResponse.toolError(id: responseId, message: "offset argument not provided",serverInfo: serverInfo)
-         return Result.failure(OffsetError.mcpError(response: response))
-      }
-   }
-   
-   public func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
-      if let intValue: Int = arguments[key] as? Int {
-         return intValue
-      } else if let valueString: String = arguments[key] as? String,
-                let intValue: Int = Int(valueString) {
-         return intValue
-      } else {
-         logWarn("\(key):'\(arguments[key] ?? "nil")' type:\(arguments[key].self ?? "nil")")
-         return nil
+         return try findByteOffset(serverInfo,responseId,at: path,name: name,lineOffset)
       }
    }
 }
 
 extension Tool_FileReadLines {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileReadLinesTool.Input.Operation,_ whichPath: String) -> MCPResponse {
-      let fileName = arguments["name"] as? String ?? ""
-      guard !fileName.isEmpty else {
-         return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: FileReadLinesTool.Input.Operation,_ whichPath: String) -> MCPResponse {
+      let fileName: String
+      let lineOffset: Int
+      let length: Int
+      let offset: Int
+
+      do {
+         fileName = try toolArguments.asString(FileReadLinesTool.Input.Arguments.name.rawValue, allowEmpty: false)
+         lineOffset = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.offset.rawValue,min: 0)
+         length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: 10)
+
+         offset = try getByteOffset(serverInfo, responseId, lineOffset, path: whichPath, name: fileName)
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: "For operation:'\(operation.rawValue)' \(error.localizedDescription)", serverInfo: serverInfo)
       }
       
       switch operation {
       case .readContentRange:
-         let offset: Int
-         
-         let offsetResult = getOffset(serverInfo, responseId, arguments, path: whichPath, name: fileName)
-         switch(offsetResult) {
-         case .success(let value):
-            offset = value.offset
-         case .failure(let offsetError):
-            switch(offsetError) {
-            case .mcpError(let response):
-               return response
-            }
-         }
-         
-         let enumValue = FileReadBytesTool.Input.Arguments.length.rawValue
-         guard let length = asInteger(arguments, enumValue) else {
-            return MCPResponse.toolError(id: responseId, message: "\(enumValue) argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
-         }
-
          return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: offset,length: length)
       }
    }
@@ -291,31 +256,18 @@ extension Tool_FileReadLines: MCPTool {
       // Does nothing
    }
    
-   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
-      let inPath: String = arguments["path"] as? String ?? "."
+   public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+      let toolArguments = ToolArguments(arguments: arguments)
       
-      let possibleOperation = FileReadLinesTool.Input.Operation(rawValue: inOperation)
+      let operation = try toolArguments.enumFromString("operation", as: FileReadLinesTool.Input.Operation.self)
+      let accessibleUrl = try toolArguments.asAccessibleURL(urlProvider, FileReadLinesTool.Input.Arguments.path.rawValue)
       
-      guard let operation = possibleOperation else {
-         let operations = FileReadLinesTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-         let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
+      debug("operation:\(operation) path:\(accessibleUrl.path)")
       
-      guard let url = FileUtils.accessibleURL(urlProvider,inPath) else {
-         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
-         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      debug("operation:\(operation) path:\(inPath)")
-      
-      _ = url.startAccessingSecurityScopedResource()
-      let result = handleOperation(serverInfo,responseId,arguments,operation,inPath)
-      url.stopAccessingSecurityScopedResource()
+      _ = accessibleUrl.rootURL.startAccessingSecurityScopedResource()
+      let result = handleOperation(serverInfo, responseId, toolArguments, operation, accessibleUrl.path)
+      accessibleUrl.rootURL.stopAccessingSecurityScopedResource()
+
       return result
    }
 }

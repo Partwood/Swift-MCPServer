@@ -7,21 +7,40 @@
 
 import Foundation
 
+public
 enum URLError: LocalizedError {
    case invalid(_ urlString: String)
-   case no_content(_ url: URL)
+   case response_invalid(_ url: URL,message: String)
+   case no_content(_ url: URL,statusCode: Int? = nil)
+   case status_code(_ url: URL,statusCode: Int)
    case does_not_exist(_ url: URL)
+   case data(_ url: URL,message: String)
 }
 
 extension URLError: CustomStringConvertible {
+   public
    var description: String {
+      let localizedMessage: String
+      
       switch(self) {
       case .invalid(let urlString):
-         return NSLocalizedString("Invalid URL: \(urlString)", comment: "Invalid url")
-      case .no_content(let url):
-         return NSLocalizedString("No content found for URL: \(url.path())", comment: "204, no content")
+         localizedMessage = NSLocalizedString("Invalid URL: \(urlString)", comment: "Invalid url")
+      case .response_invalid(let url, let message):
+         localizedMessage = NSLocalizedString("Response invalid for URL: \(url.absoluteString) \(message)", comment: "Invalid response")
+      case .status_code(let url,let statusCode):
+         localizedMessage = NSLocalizedString("HTTP request returned status code \(statusCode) for URL: \(url.absoluteString)", comment: "Status code")
+      case .no_content(let url,let statusCode):
+         if let status = statusCode {
+            localizedMessage = NSLocalizedString("HTTP request returned status code \(status), no content for URL: \(url.absoluteString)", comment: "<code>, no content")
+         } else {
+            localizedMessage = NSLocalizedString("No content found for URL: \(url.absoluteString)", comment: "204, no content")
+         }
       case .does_not_exist(let url):
-         return NSLocalizedString("The file does not exist for URL: \(url.path())", comment: "Does not exist")
+         localizedMessage = NSLocalizedString("The file does not exist for URL: \(url.absoluteString)", comment: "Does not exist")
+      case .data(let url, let message):
+         localizedMessage = NSLocalizedString("\(message) for URL: \(url.absoluteString)", comment: "Data error")
       }
+      
+      return localizedMessage
    }
 }

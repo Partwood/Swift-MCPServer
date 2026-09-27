@@ -148,7 +148,7 @@ extension Tool_FileAppend {
       
       let isDirectory: Bool
       do {
-         isDirectory = try fileURL.isDirectory()
+         isDirectory = try fileURL.isExistingDirectory()
       } catch {
          let message = "Error appending to file '\(fileString)', error: \(error.localizedDescription)"
          logError(message)

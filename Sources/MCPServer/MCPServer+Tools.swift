@@ -48,7 +48,10 @@ extension SwiftMCPServer {
       mcpTool = Tool_WebSearch(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
-      mcpTool = Tool_WebGet(serverName: self.name)
+      mcpTool = Tool_WebGetHTML(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+      
+      mcpTool = Tool_WebGetFile(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
       self.internalTools = tools

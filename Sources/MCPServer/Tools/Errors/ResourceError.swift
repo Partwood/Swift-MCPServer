@@ -5,7 +5,7 @@
 //  Created by Joshua V Sherwood on 9/17/26.
 //
 
-
+public
 enum ResourceError: Error {
    case resource_not_found
 }

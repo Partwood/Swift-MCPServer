@@ -47,7 +47,39 @@ extension URL {
       return result
    }
 
-   func isDirectory() throws -> Bool {
+   public
+   static func getFilePath(_ inPath: String) -> String {
+      let path = NSString(string: inPath).expandingTildeInPath
+      return path.removingPercentEncoding ?? path
+   }
+   
+   public
+   func getFilePath() -> String {
+      return URL.getFilePath(self.path())
+   }
+   
+   public
+   func isExisting() -> Bool {
+      return FileManager.default.fileExists(atPath: self.getFilePath())
+   }
+   
+   public
+   func isExistingFile() throws -> Bool {
+      let urlExists = FileManager.default.fileExists(atPath: self.getFilePath())
+      if ( !urlExists ) { return false }
+      
+      return try !isDirectory()
+   }
+
+   public
+   func isExistingDirectory() throws -> Bool {
+      let urlExists = FileManager.default.fileExists(atPath: self.getFilePath())
+      if ( !urlExists ) { return false }
+      
+      return try isDirectory()
+   }
+   
+   private func isDirectory() throws -> Bool {
       do {
          let resourceValues = try self.resourceValues(forKeys: [.isDirectoryKey])
          if resourceValues.isDirectory == true {

@@ -26,7 +26,6 @@ struct FileContentFind {
 enum FileContentFindError: Error {
    case error(message: String,root: (any Error))
    case utfError(message: String)
-   //case valueError(type: String,value: String,root: (any Error))
 }
 
 public typealias FileReadResult = Result<FileRead,FileReadError>
@@ -38,13 +37,12 @@ public struct FileRead {
 public enum FileReadError: Error {
    case error(message: String,root: (any Error))
    case eof(message: String)
-   //case utfError(message: String)
-   //case valueError(type: String,value: String,root: (any Error))
 }
 
 public
 final
 class FileUtils {
+   public
    static func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> URL? {
       guard let urlProvider else {
          debug("No urlProvider")
@@ -83,7 +81,7 @@ class FileUtils {
    public static func readFileToString(atPath path: String,name: String) throws -> String? {
       let fileURL = fileURL(path: path,name)
       
-      if ( try fileURL.isDirectory() ) {
+      if ( try fileURL.isExistingDirectory() ) {
          let error = FileIOError.path_is_directory(fileURL)
          logError(error)
          throw error
@@ -109,17 +107,12 @@ extension FileUtils {
          logWarn("Invalid string!!!")
       }
       
-      //var fullContent = Array<Text_Content>()
-      
-      //let fileContent: Text_Content
-      
       let fileContentString: String?
       do {
          fileContentString = try FileUtils.readFileToString(atPath: inPath,name: name)
       } catch {
          logError(error)
          return FileReadResult.failure(FileReadError.error(message: error.localizedDescription, root: error))
-         //return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
       
       let subString: String
@@ -140,21 +133,12 @@ extension FileUtils {
             let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
             logWarn(message)
             return FileReadResult.failure(FileReadError.eof(message: message))
-            //return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
       } else {
          let message = "No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
          logWarn(message)
          return FileReadResult.failure(FileReadError.eof(message: message))
       }
-      
-      //if let content = subString {
-      //} else {
-         //return MCPResponse.toolError(id: responseId, message: "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path())'", serverInfo: serverInfo)
-      //}
-      
-      //return FileReadResult.success(FileRead(content: fullContent))
-      //return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
    }
 }
 
@@ -295,72 +279,16 @@ extension FileUtils {
             }
             
             return FileContentFindResult.success(FileContentFind(content: results))
-            //return MCPResponse.toolSuccess(id: responseId, content: results, serverInfo: serverInfo)
          } else {
             let message = "No UTF8 string content present in file:\(name)"
             logWarn(message)
             return FileContentFindResult.failure(FileContentFindError.utfError(message: message))
-            //return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
       } catch {
          logError(error)
          return FileContentFindResult.failure(FileContentFindError.error(message: error.localizedDescription, root: error))
-         //return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
    }
-   
-//   enum FindError: LocalizedError {
-//      case read_error
-//      
-//      var errorDescription: String? {
-//         switch self {
-//         case .read_error:
-//            return NSLocalizedString("Failed to read file.", comment: "Read error")
-//         }
-//      }
-//   }
-//   
-//   func findByteOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,_ lineOffset: Int) -> Result<Int,FindError> {
-//      if ( lineOffset == 0 ) {
-//         return Result<Int,FindError>.success(0)
-//      }
-//      
-//      let fileContentString: String
-//      do {
-//         if let content = try FileUtils.readFileToString(atPath: inPath,name: name) {
-//            fileContentString = content
-//            
-//         } else {
-//            return Result<Int,FindError>.failure(.read_error)
-//         }
-//      } catch {
-//         logError(error)
-//         return Result<Int,FindError>.failure(.read_error)
-//      }
-//      
-//      // File read, determine byte offset
-//      let lines = fileContentString.components(separatedBy: "\n")
-//      
-//      if ( lines.count <= lineOffset ) {
-//         let byteOffset = fileContentString.utf8.count
-//         return Result<Int,FindError>.success(byteOffset)
-//      }
-//      
-//      var currentByteOffset = 0
-//      
-//      var adjustedOffset = lineOffset+1
-//      for line in lines {
-//         adjustedOffset -= 1
-//         if ( adjustedOffset <= 0 ) {
-//            return Result<Int,FindError>.success(currentByteOffset)
-//         }
-//         
-//         let lineWithNewline = line + "\n"
-//         currentByteOffset += lineWithNewline.utf8.count
-//      }
-//      
-//      return Result<Int,FindError>.success(currentByteOffset)
-//   }
 }
 
 // MARK: Write
@@ -374,7 +302,7 @@ extension FileUtils {
       let fileName = ProcessInfo.processInfo.globallyUniqueString + ext
       let fileURL = FileUtils.fileURL(path: path, fileName)
       
-      if ( try fileURL.isDirectory() ) {
+      if ( try fileURL.isExistingDirectory() ) {
          let error = Tool_FileAppend_Error.path_is_directory(fileURL)
          logError(error.description)
          throw error

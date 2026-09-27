@@ -1,9 +1,7 @@
 # Description
-Provides web search ability for querying duck duck go and getting back html formatted search results.
-
+Provides web search ability for querying duck duck go and getting back html formatted search results. When completed successfully a url to a local file with the web page results is returned.
 ## query
 ### Description
-Given a query, performs a duck duck go search and returns html content. Uses https://html.duckduckgo.com/html/?q=<query><br>
-
+Given a query, performs a duck duck go search and returns html content. Uses https://html.duckduckgo.com/html/?q=<query>
 ### Arguments
-*query* The query to perform<br>
+*query* The query to perform

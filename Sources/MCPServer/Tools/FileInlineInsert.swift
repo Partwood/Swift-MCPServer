@@ -138,7 +138,7 @@ extension Tool_FileInlineInsert {
 
       let isDirectory: Bool
       do {
-         isDirectory = try fileURL.isDirectory()
+         isDirectory = try fileURL.isExistingDirectory()
       } catch {
          let message = "Error inserting data into file:'\(fileURL.path())', error: \(error.localizedDescription)"
          logError(message)

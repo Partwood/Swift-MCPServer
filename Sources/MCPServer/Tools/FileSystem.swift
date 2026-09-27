@@ -168,59 +168,89 @@ extension Tool_FileSystem {
 
 // MARK: List directory contents
 extension Tool_FileSystem {
+   private func getAttributes(fileManager: FileManager,decodedRoot: String,file: URL) throws -> Text_Content {
+      let decodedPath: String = (file.path() as NSString).removingPercentEncoding ?? file.path()
+      
+      let attributes = try fileManager.attributesOfItem(atPath: decodedPath)
+      
+      let fileAttributes: Text_Content
+      
+      let isDirectory = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
+      if ( isDirectory ) {
+         if let fileType = attributes[FileAttributeKey.type] as? String,
+            let _ = attributes[FileAttributeKey.creationDate] as? Date,
+            let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
+            let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
+            
+            fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)' is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
+         } else {
+            let attributeError = FileIOError.attributes_not_found(file)
+            logError(attributeError)
+            throw attributeError
+         }
+      } else {
+         if let fileSize = attributes[FileAttributeKey.size] as? Int64,
+            let fileType = attributes[FileAttributeKey.type] as? String,
+            let _ = attributes[FileAttributeKey.creationDate] as? Date,
+            let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
+            let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
+            
+            fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
+         } else {
+            let attributeError = FileIOError.attributes_not_found(file)
+            logError(attributeError)
+            throw attributeError
+         }
+      }
+      
+      return fileAttributes
+   }
+   
    func listDirectory(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String) -> MCPResponse {
       let fileManager = FileManager.default
       
       let path = NSString(string: inPath).expandingTildeInPath
-      let directoryURL = URL(fileURLWithPath: path)
-      
+      let decodedRoot: String = path.removingPercentEncoding ?? path
+      let pathURL = URL(fileURLWithPath: decodedRoot)
+
       var files = Array<Text_Content>()
       
-      let decodedRoot: String = path.removingPercentEncoding ?? path
+      let directoryURL: URL
       
+      if ( pathURL.isExisting() ) {
+         do {
+            if ( try pathURL.isExistingFile() ) {
+               let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: pathURL)
+               
+               files.append(fileAttributes)
+               
+               return MCPResponse.toolSuccess(id: responseId, content: files,serverInfo: serverInfo)
+            }
+         } catch {
+            logError(error)
+            return MCPResponse.toolError(id: responseId, message: "\(error.localizedDescription)",serverInfo: serverInfo)
+         }
+         
+         // If we get here then it exists, but it is not a file (implies it is a directory)
+         directoryURL = pathURL
+      } else {
+         let missing = FileIOError.directory_not_found(pathURL)
+         logError(missing)
+         return MCPResponse.toolError(id: responseId, message: "\(missing.localizedDescription)",serverInfo: serverInfo)
+      }
+
       do {
          // Get contents (files and subfolders)
          let directoryContents = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
          
          let _ = directoryContents.map { file in
             if ( file.lastPathComponent.hasPrefix(".") ) {
-               // Ignore any fie that starts with .
+               // Ignore any file that starts with .
                return
             }
             
             do {
-               let decodedPath: String = (file.path() as NSString).removingPercentEncoding ?? file.path()
-               
-               let attributes = try fileManager.attributesOfItem(atPath: decodedPath)
-               //debug("File attributes: \(attributes)")
-               
-               let fileAttributes: Text_Content
-               
-               let isDirectory = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
-               if ( isDirectory ) {
-                  if let fileType = attributes[FileAttributeKey.type] as? String,
-                     let _ = attributes[FileAttributeKey.creationDate] as? Date,
-                     let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-                     let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
-                     
-                     fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)' is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
-                  } else {
-                     logError("Can't get attributes for directory: '\(file.lastPathComponent)'")
-                     fileAttributes = Text_Content(text: "Couldn't get attributes for directory '\(file.lastPathComponent)' in directory '\(decodedRoot)'")
-                  }
-               } else {
-                  if let fileSize = attributes[FileAttributeKey.size] as? Int64,
-                     let fileType = attributes[FileAttributeKey.type] as? String,
-                     let _ = attributes[FileAttributeKey.creationDate] as? Date,
-                     let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-                     let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
-                     
-                     fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
-                  } else {
-                     logError("Can't get attributes for file: '\(file.lastPathComponent)'")
-                     fileAttributes = Text_Content(text: "Couldn't get attributes for file '\(file.lastPathComponent)' in directory '\(decodedRoot)'")
-                  }
-               }
+               let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: file)
                
                files.append(fileAttributes)
             } catch {
@@ -372,9 +402,7 @@ extension Tool_FileSystem: MCPTool {
       // Does nothing
    }
    
-   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      //debug("req:\(req.method)")
-      
+   func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
       let inPath: String = arguments["path"] as? String ?? "."
       

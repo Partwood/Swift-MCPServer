@@ -84,11 +84,11 @@ class Tool_FileReadBytes {
                ],
                "offset": [
                   "type": "number",
-                  "description": "The offset in bytes as an integer"
+                  "description": "The integer number of bytes from the start"
                ],
                "length": [
                   "type": "number",
-                  "description": "The length in bytes as an integer"
+                  "description": "The integer number of bytes to read from the provided offset value. Should not exceed 8192"
                ],
             ],
             "required": ["operation", "path", "name", "offset", "length"]
@@ -176,68 +176,27 @@ extension Tool_FileReadBytes {
    public enum OffsetError: Error {
       case mcpError(response: MCPResponse)
    }
-   
-   // Ensure that the offset value is > 0 and an integer, if using line_offset must have same constraints and be converted
-   public func getOffset(_ serverInfo: ServerInfo,_ responseId: String,_ arguments: [String : Any],path: String,name:String) -> Result<OffsetSuccess, OffsetError> {
-      if let _ = arguments["offset"] {
-         // byte offset provided
-         if let integerValue = asInteger(arguments, "offset") {
-            if ( integerValue < 0 ) {
-               let response = MCPResponse.toolError(id: responseId, message: "offset is not a positive integer",serverInfo: serverInfo)
-               return Result.failure(OffsetError.mcpError(response: response))
-            } else {
-               return Result.success(OffsetSuccess(offset: integerValue))
-            }
-         } else {
-            let response = MCPResponse.toolError(id: responseId, message: "offset is not an integer",serverInfo: serverInfo)
-            return Result.failure(OffsetError.mcpError(response: response))
-         }
-      } else {
-         let response = MCPResponse.toolError(id: responseId, message: "offset argument not provided",serverInfo: serverInfo)
-         return Result.failure(OffsetError.mcpError(response: response))
-      }
-   }
-   
-   public func asInteger(_ arguments: [String : Any],_ key: String) -> Int? {
-      if let intValue: Int = arguments[key] as? Int {
-         return intValue
-      } else if let valueString: String = arguments[key] as? String,
-                let intValue: Int = Int(valueString) {
-         return intValue
-      } else {
-         logWarn("\(key):'\(arguments[key] ?? "nil")' type:\(arguments[key].self ?? "nil")")
-         return nil
-      }
-   }
 }
 
 extension Tool_FileReadBytes {
    private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileReadBytesTool.Input.Operation,_ whichPath: String) -> MCPResponse {
-      let fileName = arguments["name"] as? String ?? ""
-      guard !fileName.isEmpty else {
-         return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
+      let toolArguments = ToolArguments(arguments: arguments)
+      
+      let fileName: String
+      let offset: Int
+      let length: Int
+      
+      do {
+         fileName = try toolArguments.asString(FileReadBytesTool.Input.Arguments.name.rawValue, allowEmpty: false)
+         offset = try toolArguments.asInteger(FileReadBytesTool.Input.Arguments.offset.rawValue,min: 0)
+         length = try toolArguments.asInteger(FileReadBytesTool.Input.Arguments.length.rawValue,max: 8192)
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: "For operation:'\(operation.rawValue)' \(error.localizedDescription)", serverInfo: serverInfo)
       }
       
       switch operation {
       case .readContentRange:
-         let offset: Int
-         
-         let offsetResult = getOffset(serverInfo, responseId, arguments, path: whichPath, name: fileName)
-         switch(offsetResult) {
-         case .success(let value):
-            offset = value.offset
-         case .failure(let offsetError):
-            switch(offsetError) {
-            case .mcpError(let response):
-               return response
-            }
-         }
-         
-         let enumValue = FileReadBytesTool.Input.Arguments.length.rawValue
-         guard let length = asInteger(arguments, enumValue) else {
-            return MCPResponse.toolError(id: responseId, message: "\(enumValue) argument not provided or unable to convert to an integer value",serverInfo: serverInfo)
-         }
-         
          return readFile(serverInfo,responseId,at: whichPath,name: fileName,offset: offset,length: length)
       }
    }
@@ -257,30 +216,17 @@ extension Tool_FileReadBytes: MCPTool {
    }
    
    public func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?/*,_ req: MCPRequest*/, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
-      let inPath: String = arguments["path"] as? String ?? "."
+      let toolArguments = ToolArguments(arguments: arguments)
       
-      let possibleOperation = FileReadBytesTool.Input.Operation(rawValue: inOperation)
+      let operation = try toolArguments.enumFromString("operation", as: FileReadBytesTool.Input.Operation.self)
+      let accessibleUrl = try toolArguments.asAccessibleURL(urlProvider, FileReadBytesTool.Input.Arguments.path.rawValue)
       
-      guard let operation = possibleOperation else {
-         let operations = FileReadBytesTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-         let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
+      debug("operation:\(operation) path:\(accessibleUrl.path)")
       
-      guard let url = accessibleURL(urlProvider,inPath) else {
-         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
-         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
+      _ = accessibleUrl.rootURL.startAccessingSecurityScopedResource()
+      let result = handleOperation(serverInfo,responseId,arguments,operation,accessibleUrl.path)
+      accessibleUrl.rootURL.stopAccessingSecurityScopedResource()
       
-      debug("operation:\(operation) path:\(inPath)")
-      
-      _ = url.startAccessingSecurityScopedResource()
-      let result = handleOperation(serverInfo,responseId,arguments,operation,inPath)
-      url.stopAccessingSecurityScopedResource()
       return result
    }
 }
