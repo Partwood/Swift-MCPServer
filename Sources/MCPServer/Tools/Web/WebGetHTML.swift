@@ -6,8 +6,8 @@
 //
 
 import Foundation
-
 import Vapor
+import HTMLToMarkdown
 
 struct WebGetHTMLTool: Content {
    static let resourceName: String = "WebGetHTML"
@@ -84,12 +84,13 @@ class Tool_WebGetHTML {
 extension Tool_WebGetHTML {
    func get(path: String,url: String) throws -> String {
       let string = try WebGetUtils.getAsString(url: url)
+      let markdown = try HTMLToMarkdown.convert(string)
 
       // Now write the content to a file, and return that
-      let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".html",data: string)
-      let message = "The content of the url were saved to the local file system. The content can be found in the file:"+tempFile
+      let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".md",data: markdown)
+      let response = "The content of the url was converted to markdown and saved to the local file system. The content can be found in the file:"+tempFile
       
-      return message
+      return response
    }
 }
 

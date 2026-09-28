@@ -6,8 +6,8 @@
 //
 
 import Foundation
-
 import Vapor
+import HTMLToMarkdown
 
 struct WebSearchTool: Content {
    static let resourceName: String = "WebSearch"
@@ -87,10 +87,11 @@ extension Tool_WebSearch {
       let searchURLString = "\(base)?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
       
       let string = try WebGetUtils.getAsString(url: searchURLString)
+      let markdown = try HTMLToMarkdown.convert(string)
       
       // Now write the content to a file, and return that
-      let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".html",data: string)
-      let response = "The results of the search were saved to the local file system. The results can be found in the file:"+tempFile
+      let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".md",data: markdown)
+      let response = "The results of the search were converted to markdown and saved to the local file system. The results can be found in the file:"+tempFile
       
       return response
    }

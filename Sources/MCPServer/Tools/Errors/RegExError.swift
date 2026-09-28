@@ -9,6 +9,10 @@ import Foundation
 
 enum RegExErrorError: LocalizedError {
    case invalid_pattern(_ pattern: String)
+
+   public var errorDescription: String? {
+      return description
+   }
 }
 
 extension RegExErrorError: CustomStringConvertible {

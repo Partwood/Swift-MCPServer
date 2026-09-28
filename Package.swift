@@ -19,7 +19,8 @@ let package = Package(
     dependencies: [
       // Dependencies declare other packages that this package depends on.
       .package(url: "https://github.com/vapor/vapor", .upToNextMajor(from: "4.121.2")),
-      .package(url: "https://github.com/ibrahimcetin/SwiftGitX",.upToNextMajor(from: "0.4.0"))
+      .package(url: "https://github.com/ibrahimcetin/SwiftGitX",.upToNextMajor(from: "0.4.0")),
+      .package(url: "https://github.com/jaredhowland/html-to-markdown-swift.git", from: "0.9.0")
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -28,7 +29,8 @@ let package = Package(
             name: "Swift_MCPServer",
             dependencies: [
                .product(name: "Vapor", package: "vapor"),
-               .product(name: "SwiftGitX", package: "SwiftGitX")
+               .product(name: "SwiftGitX", package: "SwiftGitX"),
+               .product(name: "HTMLToMarkdown", package: "html-to-markdown-swift")
             ],
             resources: [
                .process("Resources/FileAppend.md"),

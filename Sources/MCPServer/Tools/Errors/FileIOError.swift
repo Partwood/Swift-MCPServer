@@ -15,6 +15,10 @@ enum FileIOError: LocalizedError {
    case file_not_found(_ url: URL)
    case directory_not_found(_ url: URL)
    case attributes_not_found(_ url: URL)
+
+   public var errorDescription: String? {
+      return description
+   }
 }
 
 extension FileIOError: CustomStringConvertible {

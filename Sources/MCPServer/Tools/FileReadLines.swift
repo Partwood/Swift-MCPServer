@@ -228,7 +228,7 @@ extension Tool_FileReadLines {
       do {
          fileName = try toolArguments.asString(FileReadLinesTool.Input.Arguments.name.rawValue, allowEmpty: false)
          lineOffset = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.offset.rawValue,min: 0)
-         length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: 10)
+         length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: 20)
 
          offset = try getByteOffset(serverInfo, responseId, lineOffset, path: whichPath, name: fileName)
       } catch {

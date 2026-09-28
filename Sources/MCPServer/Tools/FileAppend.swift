@@ -61,6 +61,10 @@ struct FileAppendTool: Content {
 enum Tool_FileAppend_Error: LocalizedError {
    case path_is_directory(_ url: URL)
    case path_is_file(_ url: URL)
+
+   public var errorDescription: String? {
+      return description
+   }
 }
 
 extension Tool_FileAppend_Error: CustomStringConvertible {

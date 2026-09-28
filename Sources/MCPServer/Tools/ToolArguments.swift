@@ -7,32 +7,40 @@
 
 import Foundation
 
-enum ToolArgumentError: Error {
+enum ToolArgumentError: LocalizedError {
    case argument_missing(message: String)
    case invalid_string(message: String)
    case empty_string(message: String)
    case invalid_integer(message: String)
    case path_not_accessible(message: String)
    case enum_missing(message: String)
+
+   public var errorDescription: String? {
+      return description
+   }
 }
 
 extension ToolArgumentError: CustomStringConvertible {
    public
    var description: String {
+      let localizedMessage: String
+      
       switch(self) {
       case .argument_missing(let message):
-         return NSLocalizedString(message, comment: "Missing")
+         localizedMessage = NSLocalizedString(message, comment: "Missing")
       case .empty_string(let message):
-         return NSLocalizedString(message, comment: "Empty")
+         localizedMessage = NSLocalizedString(message, comment: "Empty")
       case .invalid_string(let message):
-         return NSLocalizedString(message, comment: "Invalid")
+         localizedMessage = NSLocalizedString(message, comment: "Invalid")
       case .invalid_integer(let message):
-         return NSLocalizedString(message, comment: "Invalid")
+         localizedMessage = NSLocalizedString(message, comment: "Invalid")
       case .path_not_accessible(let message):
-         return NSLocalizedString(message, comment: "Not Accessible")
+         localizedMessage = NSLocalizedString(message, comment: "Not Accessible")
       case .enum_missing(let message):
-         return NSLocalizedString(message, comment: "Missing")
+         localizedMessage = NSLocalizedString(message, comment: "Missing")
       }
+      
+      return localizedMessage
    }
 }
 
@@ -49,15 +57,21 @@ class ToolArguments {
       if let value = arguments[argument] {
          if let stringValue = value as? String {
             if ( !allowEmpty && stringValue.isEmpty ) {
-               throw ToolArgumentError.empty_string(message: "\(argument) is an empty string")
+               let stringError = ToolArgumentError.empty_string(message: "\(argument) is an empty string")
+               logError(stringError)
+               throw stringError
             } else {
                return stringValue
             }
          } else {
-            throw ToolArgumentError.invalid_string(message: "\(argument) is not a string")
+            let stringError = ToolArgumentError.invalid_string(message: "\(argument) is not a string")
+            logError(stringError)
+            throw stringError
          }
       } else {
-         throw ToolArgumentError.argument_missing(message: "\(argument) not provided")
+         let stringError = ToolArgumentError.argument_missing(message: "\(argument) not provided")
+         logError(stringError)
+         throw stringError
       }
    }
    
@@ -69,10 +83,14 @@ class ToolArguments {
                    let intValue: Int = Int(valueString) {
             return intValue
          } else {
-            throw ToolArgumentError.invalid_string(message: "\(argument) is not an integer or a string that is an integer value")
+            let integerError = ToolArgumentError.invalid_string(message: "\(argument) is not an integer or a string that is an integer value")
+            logError(integerError)
+            throw integerError
          }
       } else {
-         throw ToolArgumentError.argument_missing(message: "\(argument) not provided")
+         let integerError = ToolArgumentError.argument_missing(message: "\(argument) not provided")
+         logError(integerError)
+         throw integerError
       }
    }
       
@@ -82,14 +100,18 @@ class ToolArguments {
       if let min {
          if ( value < min ) {
             let message = "\(argument) value(\(value)) is to small, should be equal or greater than \(min)"
-            throw ToolArgumentError.invalid_integer(message: message)
+            let integerError = ToolArgumentError.invalid_integer(message: message)
+            logError(integerError)
+            throw integerError
          }
       }
       
       if let max {
          if ( value > max ) {
             let message = "\(argument) value(\(value)) is to large, should be equal or less than \(max)"
-            throw ToolArgumentError.invalid_integer(message: message)
+            let integerError = ToolArgumentError.invalid_integer(message: message)
+            logError(integerError)
+            throw integerError
          }
       }
       
@@ -102,7 +124,9 @@ class ToolArguments {
       guard let whichURL = FileUtils.accessibleURL(urlProvider,argumentPath) else {
          let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
          let message = "\(argumentPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
-         throw ToolArgumentError.path_not_accessible(message: message)
+         let argumentError = ToolArgumentError.path_not_accessible(message: message)
+         logError(argumentError)
+         throw argumentError
       }
       
       return (argumentPath, whichURL)
@@ -119,6 +143,8 @@ class ToolArguments {
       // Collect all actual raw string values to list in the error
       let actualValues = T.allCases.map { $0.rawValue }
       let message = "Unknown \(argument) '\(possibleValue)'. Valid options for \(argument) are \(actualValues) and are all lower case."
-      throw ToolArgumentError.enum_missing(message: message)
+      let enumError = ToolArgumentError.enum_missing(message: message)
+      logError(enumError)
+      throw enumError
    }
 }

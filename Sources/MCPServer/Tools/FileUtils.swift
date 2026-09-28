@@ -54,11 +54,12 @@ class FileUtils {
          return nil
       }
       
+      let expandedPath = NSString(string: path).expandingTildeInPath
+      let desiredURL = URL(fileURLWithPath: expandedPath)
+      
       let first = urls.first(where: { url in
          debug("url:\(url.path)\npath:\(path)")
          
-         let expandedPath = NSString(string: path).expandingTildeInPath
-         let desiredURL = URL(fileURLWithPath: expandedPath)
          return desiredURL.isContained(in: url)
       })
       

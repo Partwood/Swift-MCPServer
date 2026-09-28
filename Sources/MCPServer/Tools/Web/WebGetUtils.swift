@@ -31,7 +31,15 @@ class WebGetUtils {
    
    static func get(url: String) throws -> Data {
       guard let getURL = URL(string: url) else {
-         throw URLError.invalid(url)
+         let invalidURLError = URLError.invalid(url)
+         logError(invalidURLError)
+         throw invalidURLError
+      }
+      
+      if getURL.isFileURL {
+         let fileTypeError = URLError.file_type(getURL)
+         logError(fileTypeError)
+         throw fileTypeError
       }
       
       let semaphore = DispatchSemaphore(value: 0)
@@ -40,7 +48,11 @@ class WebGetUtils {
       // Swift 6 allows capturing this object because it's explicitly marked 'Sendable'
       let container = SendableBox()
       
-      URLSession.shared.dataTask(with: getURL) { data, response, error in
+      var request = URLRequest(url: getURL)
+      request.httpMethod = "GET"
+      request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
+
+      URLSession.shared.dataTask(with: request) { data, response, error in
          // Defer guarantees the caller thread unblocks even if parsing throws an error
          defer { semaphore.signal() }
          

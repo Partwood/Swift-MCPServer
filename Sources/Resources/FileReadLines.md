@@ -1,5 +1,5 @@
 # Description
-Provides operation for reading a file by specifying a line offset and amount of lines (*length*), with length limited to at most 10
+Provides operation for reading a file by specifying a line offset and amount of lines (*length*), with length limited to at most 20
 
 ## read_lines
 ### Description
@@ -8,4 +8,4 @@ Returns a part of the content of a file, using a line offset (*offset*) from sta
 *path* The directory where the file is located
 *name* The name of the file
 *offset* The integer number of lines from the start
-*length* The integer number of lines to read from the provided offset value. Should not exceed 10
+*length* The integer number of lines to read from the provided offset value. Should not exceed 20

@@ -68,6 +68,10 @@ enum Tool_FileSystem_Error: LocalizedError {
    case path_is_directory(_ url: URL)
    case path_is_file(_ url: URL)
    case invalid_pattern(_ pattern: String)
+
+   public var errorDescription: String? {
+      return description
+   }
 }
 
 extension Tool_FileSystem_Error: CustomStringConvertible {
@@ -118,28 +122,6 @@ class Tool_FileSystem {
             "required": ["operation", "path"]
          ])
       )
-   }
-   
-   func accessibleURL(_ urlProvider: URLProvider?,_ path: String) -> URL? {
-      guard let urlProvider else {
-         debug("No urlProvider")
-         return nil
-      }
-      let urls = urlProvider.urls
-      if urls.isEmpty {
-         debug("No urlProvider.urls")
-         return nil
-      }
-      
-      let first = urls.first(where: { url in
-         debug("url:\(url.path)\npath:\(path)")
-         
-         let expandedPath = NSString(string: path).expandingTildeInPath
-         let desiredURL = URL(fileURLWithPath: expandedPath)
-         return desiredURL.isContained(in: url)
-      })
-      
-      return first
    }
 }
 
@@ -368,12 +350,17 @@ extension Tool_FileSystem {
 
 // MARK: Operation processing
 extension Tool_FileSystem {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: FileSystemTool.Input.Operation,_ whichPath: String) -> MCPResponse {
-      let name = arguments["name"] as? String ?? ""
-      if operation.requiresName {
-         guard !name.isEmpty else {
-            return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: FileSystemTool.Input.Operation,_ whichPath: String) -> MCPResponse {
+      let name: String
+
+      if ( operation.requiresName ) {
+         do {
+            name = try toolArguments.asString("name", allowEmpty: false)
+         } catch {
+            return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
          }
+      } else {
+         name = ""
       }
       
       switch operation {
@@ -403,30 +390,15 @@ extension Tool_FileSystem: MCPTool {
    }
    
    func handleOperation(_ serverInfo: ServerInfo,_ urlProvider: URLProvider?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
-      let inPath: String = arguments["path"] as? String ?? "."
+      let toolArguments = ToolArguments(arguments: arguments)
+      let operation = try toolArguments.enumFromString("operation", as: FileSystemTool.Input.Operation.self)
+      let accessibleURL = try toolArguments.asAccessibleURL(urlProvider, "path")
       
-      let possibleOperation = FileSystemTool.Input.Operation(rawValue: inOperation)
+      debug("operation:\(operation) path:\(accessibleURL.path)")
       
-      guard let operation = possibleOperation else {
-         let operations = FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-         let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      guard let url = accessibleURL(urlProvider,inPath) else {
-         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
-         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      debug("operation:\(operation) path:\(inPath)")
-      
-      _ = url.startAccessingSecurityScopedResource()
-      let result = handleOperation(serverInfo,responseId,arguments,operation,inPath)
-      url.stopAccessingSecurityScopedResource()
+      _ = accessibleURL.rootURL.startAccessingSecurityScopedResource()
+      let result = handleOperation(serverInfo, responseId, toolArguments, operation, accessibleURL.path)
+      accessibleURL.rootURL.stopAccessingSecurityScopedResource()
       return result
    }
 }
