@@ -10,18 +10,18 @@
 import Vapor
 
 struct FileSystemTool: Content {
+   static let resourceName: String = "FileSystem"
    let name: String
    
-   // Helper method to load the description from FileSystem.md
+   // Helper method to load the description from <resourceName>.md
    static func loadDescription() -> String {
-      let resourceName: String = "FileSystem"
-      
       do {
          if let filePath = Bundle.module.url(forResource: resourceName, withExtension: "md") {
             // Read your file data here
             let textContent = try String(contentsOf: filePath, encoding: .utf8)
             return textContent
          } else {
+            assertionFailure(FileAppendToolError.resource_not_found.localizedDescription)
             throw FileAppendToolError.resource_not_found
          }
       } catch {
@@ -60,32 +60,32 @@ struct FileSystemTool: Content {
    }
    
    init(serverName: String) {
-      name = "mcp_"+serverName+"_filesystem"
+      name = "mcp_"+serverName+"_"+FileSystemTool.resourceName.lowercased()
    }
 }
 
-enum Tool_FileSystem_Error: LocalizedError {
-   case path_is_directory(_ url: URL)
-   case path_is_file(_ url: URL)
-   case invalid_pattern(_ pattern: String)
-
-   public var errorDescription: String? {
-      return description
-   }
-}
-
-extension Tool_FileSystem_Error: CustomStringConvertible {
-   var description: String {
-      switch(self) {
-      case .path_is_directory(let url):
-         return NSLocalizedString("Operation error: '\(url)' is a directory", comment: "Unexpected directory")
-      case .path_is_file(let url):
-         return NSLocalizedString("Operation error: '\(url)' is a file", comment: "Unexpected file")
-      case .invalid_pattern(let pattern):
-         return NSLocalizedString("Operation error: Invalid wildcard pattern '\(pattern)'", comment: "Invalid pattern")
-      }
-   }
-}
+//enum Tool_FileSystem_Error: LocalizedError {
+//   case path_is_directory(_ url: URL)
+//   case path_is_file(_ url: URL)
+//   case invalid_pattern(_ pattern: String)
+//
+//   public var errorDescription: String? {
+//      return description
+//   }
+//}
+//
+//extension Tool_FileSystem_Error: CustomStringConvertible {
+//   var description: String {
+//      switch(self) {
+//      case .path_is_directory(let url):
+//         return NSLocalizedString("Operation error: '\(url)' is a directory", comment: "Unexpected directory")
+//      case .path_is_file(let url):
+//         return NSLocalizedString("Operation error: '\(url)' is a file", comment: "Unexpected file")
+//      case .invalid_pattern(let pattern):
+//         return NSLocalizedString("Operation error: Invalid wildcard pattern '\(pattern)'", comment: "Invalid pattern")
+//      }
+//   }
+//}
 
 final
 class Tool_FileSystem {
@@ -105,6 +105,7 @@ class Tool_FileSystem {
                "operation": [
                   "type": "string",
                   "description": "One of the following values:"+FileSystemTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "enum": FileSystemTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "path": [
                   "type": "string",
@@ -114,10 +115,6 @@ class Tool_FileSystem {
                   "type": "string",
                   "description": "The file or directory name to find within the path provided"
                ],
-               //               "destination": [
-               //                  "type": "string",
-               //                  "description": "The destination location on disk if the operation is move or copy"
-               //               ],
             ],
             "required": ["operation", "path"]
          ])
@@ -150,6 +147,54 @@ extension Tool_FileSystem {
 
 // MARK: List directory contents
 extension Tool_FileSystem {
+   enum FileContentType: String {
+      case binary
+      case text
+      case jpeg
+      case png
+      case markdown
+      case unknown
+   }
+   
+   func identifyFileType(at url: URL) -> FileContentType {
+      do {
+         // Read the first 1024 bytes of the file to check for binary patterns or magic numbers
+         let fileHandle = try FileHandle(forReadingFrom: url)
+         defer { fileHandle.closeFile() }
+         
+         let data = fileHandle.readData(ofLength: min(1024, Int(fileHandle.seekToEndOfFile())))
+         let byteArray = [UInt8](data)
+         
+         // Check for null bytes (indicative of binary files)
+         if byteArray.contains(0x00) {
+            return .binary
+         }
+         
+         // Check for JPEG magic number: 0xFFD8FF
+         if byteArray.count >= 3 && byteArray[0] == 0xFF && byteArray[1] == 0xD8 && byteArray[2] == 0xFF {
+            return .jpeg
+         }
+         
+         // Check for PNG magic number: 0x89504E47
+         if byteArray.count >= 8 && byteArray[0] == 0x89 && byteArray[1] == 0x50 && byteArray[2] == 0x4E && byteArray[3] == 0x47 {
+            return .png
+         }
+         
+         // Attempt to decode as UTF-8 text
+         if let string = String(data: data, encoding: .utf8) {
+            // Check for Markdown patterns (e.g., starts with # or ---)
+            if string.hasPrefix("#") || string.hasPrefix("---") {
+               return .markdown
+            }
+            return .text
+         }
+      } catch {
+         logError("Error reading file: \(error)")
+      }
+      
+      return .unknown
+   }
+
    private func getAttributes(fileManager: FileManager,decodedRoot: String,file: URL) throws -> Text_Content {
       let decodedPath: String = (file.path() as NSString).removingPercentEncoding ?? file.path()
       
@@ -177,7 +222,9 @@ extension Tool_FileSystem {
             let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
             let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
             
-            fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
+            let contentType = identifyFileType(at: file)
+            
+            fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) and content type \(contentType) in directory '\(decodedRoot)'")
          } else {
             let attributeError = FileIOError.attributes_not_found(file)
             logError(attributeError)
@@ -264,7 +311,7 @@ extension Tool_FileSystem {
       } catch {
          logError(error)
          
-         let invalidPatternError = Tool_FileSystem_Error.invalid_pattern(pattern)
+         let invalidPatternError = RegExError.invalid_pattern(pattern)
          
          logError(invalidPatternError)
          throw invalidPatternError

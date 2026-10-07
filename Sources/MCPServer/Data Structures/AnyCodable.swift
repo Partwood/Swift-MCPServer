@@ -15,7 +15,7 @@ struct AnyCodable: Codable, @unchecked Sendable {
    init(_ value: Any) {
       self.value = value
    }
-   
+
    public
    init(from decoder: Decoder) throws {
       let container = try decoder.singleValueContainer()

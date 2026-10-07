@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum RegExErrorError: LocalizedError {
+enum RegExError: LocalizedError {
    case invalid_pattern(_ pattern: String)
 
    public var errorDescription: String? {
@@ -15,7 +15,7 @@ enum RegExErrorError: LocalizedError {
    }
 }
 
-extension RegExErrorError: CustomStringConvertible {
+extension RegExError: CustomStringConvertible {
    var description: String {
       switch(self) {
       case .invalid_pattern(let pattern):

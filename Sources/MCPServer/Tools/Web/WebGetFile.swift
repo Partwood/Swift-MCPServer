@@ -38,7 +38,13 @@ struct WebGetFileTool: Content {
       enum Operation: String, Codable, CaseIterable {
          case get_file = "get_file"
       }
-      
+
+      enum Arguments: String, Codable, CaseIterable {
+         case url = "url"
+         case path = "path"
+         case name = "name"
+      }
+
       //let operation: Operation
       //let path: String
       //let content: String? // For write operations
@@ -75,11 +81,11 @@ class Tool_WebGetFile {
                ],
                "path": [
                   "type": "string",
-                  "description": "The destination for the file specified by the fetched url"
+                  "description": "The absolute directory path to the target file folder (e.g. '/Users/project/src'). Exclude the file name."
                ],
                "name": [
                   "type": "string",
-                  "description": "The file name"
+                  "description": "The exact file name including its extension (e.g. 'image.png' or 'config.json')."
                ],
             ],
             "required": ["operation", "url", "path", "name"]
@@ -114,13 +120,17 @@ extension Tool_WebGetFile {
 }
 
 extension Tool_WebGetFile {
-   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ arguments: [String : Any],_ operation: WebGetFileTool.Input.Operation,
+   private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: WebGetFileTool.Input.Operation,
                                 path: String,
                                 url: String) -> MCPResponse {
-      guard let fileName = arguments["name"] as? String,
-            !fileName.isEmpty else {
-         return MCPResponse.toolError(id: responseId, message: "name not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
+      let fileName:String
+      do {
+       fileName = try toolArguments.asString("name", allowEmpty: false)
+      } catch {
+         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
+      
+      debug("operation:\(operation) name:\(fileName)")
       
       do {
          let result: String
@@ -152,39 +162,17 @@ extension Tool_WebGetFile: MCPTool {
    }
    
    func handleOperation(_ serverInfo: ServerInfo, _ urlProvider: (any URLProvider)?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
-      let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
+      let toolArguments = ToolArguments(arguments: arguments)
       
-      let possibleOperation = WebGetFileTool.Input.Operation(rawValue: inOperation)
+      let operation = try toolArguments.enumFromString("operation", as: WebGetFileTool.Input.Operation.self)
+      let urlString = try toolArguments.asString("url", allowEmpty: false)
+      let accessibleUrl = try toolArguments.asAccessibleURL(urlProvider, WebGetFileTool.Input.Arguments.path.rawValue)
       
-      guard let operation = possibleOperation else {
-         let operations = WebGetFileTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator: ",")
-         let message = "Unknown operation '\(inOperation)' valid operations are \(operations) and are all lower case."
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
+      debug("operation:\(operation) url:\(urlString) accessiblePath:\(accessibleUrl.rootURL.path()) destination:\(accessibleUrl.path)")
 
-      guard let inUrl: String = arguments["url"] as? String,
-            !inUrl.isEmpty else {
-         return MCPResponse.toolError(id: responseId, message: "url not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
-      }
-
-      guard let inPath: String = arguments["path"] as? String,
-            !inPath.isEmpty else {
-         return MCPResponse.toolError(id: responseId, message: "path not provided for operation:'\(operation.rawValue)'", serverInfo: serverInfo)
-      }
-
-      guard let accessiblePath = FileUtils.accessibleURL(urlProvider,inPath) else {
-         let paths = urlProvider?.urls.map({ "\"\($0.path)\"" }).joined(separator: ",")
-         let message = "\(inPath) is not accessible, path is not a child of the paths: \(paths ?? "nil")"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      debug("operation:\(operation) url:\(inUrl) accessiblePath:\(accessiblePath)")
-
-      _ = accessiblePath.startAccessingSecurityScopedResource()
-      let result = handleOperation(serverInfo,responseId,arguments,operation,path: inPath,url: inUrl)
-      accessiblePath.stopAccessingSecurityScopedResource()
+      _ = accessibleUrl.rootURL.startAccessingSecurityScopedResource()
+      let result = handleOperation(serverInfo, responseId, toolArguments, operation,path: accessibleUrl.path,url: urlString)
+      accessibleUrl.rootURL.stopAccessingSecurityScopedResource()
 
       return result
    }

@@ -72,23 +72,26 @@ class Tool_FileReadBytes {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+FileReadBytesTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": FileReadBytesTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "path": [
                   "type": "string",
-                  "description": "The path to a file or directory"
+                  "description": "The absolute directory path to the target file folder (e.g. '/Users/project/src'). Exclude the file name."
                ],
                "name": [
                   "type": "string",
-                  "description": "The file or directory name"
+                  "description": "The exact file name including its extension (e.g. 'main.swift' or 'config.json')."
                ],
                "offset": [
                   "type": "number",
-                  "description": "The integer number of bytes from the start"
+                  "description": "The starting position in bytes from where the reading begins. Use 0 to start from the beginning.",
+                  "minimum": 0,
                ],
                "length": [
                   "type": "number",
-                  "description": "The integer number of bytes to read from the provided offset value. Should not exceed 8192"
+                  "description": "The maximum number of bytes to retrieve in a single operation. Restrict this to 8192 or lower to avoid overflow.",
+                  "maximum": 8192,
                ],
             ],
             "required": ["operation", "path", "name", "offset", "length"]

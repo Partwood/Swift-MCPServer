@@ -66,11 +66,13 @@ class Tool_WebSearch {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+WebSearchTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": WebSearchTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "query": [
                   "type": "string",
-                  "description": "The query to perform"
+                  "description": "The query to perform, limited to 2000 characters or less.",
+                  "maxLength": 2000,
                ],
             ],
             "required": ["operation", "query"]
@@ -86,12 +88,16 @@ extension Tool_WebSearch {
       let base = "https://html.duckduckgo.com/html/"
       let searchURLString = "\(base)?q=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
       
+      debug(searchURLString)
+      
       let string = try WebGetUtils.getAsString(url: searchURLString)
       let markdown = try HTMLToMarkdown.convert(string)
       
       // Now write the content to a file, and return that
       let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".md",data: markdown)
       let response = "The results of the search were converted to markdown and saved to the local file system. The results can be found in the file:"+tempFile
+      
+      debug(response)
       
       return response
    }
@@ -128,8 +134,10 @@ extension Tool_WebSearch: MCPTool {
    }
    
    func handleOperation(_ serverInfo: ServerInfo, _ urlProvider: (any URLProvider)?, _ responseId: String, _ arguments: [String : Any]) throws -> MCPResponse {
+      let toolArguments = ToolArguments(arguments: arguments)
+      
       let inOperation: String = (arguments["operation"] as? String ?? "").lowercased()
-      let inQuery: String = arguments["query"] as? String ?? "."
+      let inQuery: String = try toolArguments.asString("query", allowEmpty: false,max: 2000)
       let inPath: String = FileManager.default.temporaryDirectory.path()
       
       let possibleOperation = WebSearchTool.Input.Operation(rawValue: inOperation)

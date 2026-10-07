@@ -67,11 +67,12 @@ class Tool_WebGetHTML {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+WebGetHTMLTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": WebGetHTMLTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "url": [
                   "type": "string",
-                  "description": "The url to fetch"
+                  "description": "The fully qualified absolute URL to fetch, including the scheme (e.g., 'https://example.com'). Must begin with http:// or https://."
                ],
             ],
             "required": ["operation", "url"]
@@ -83,12 +84,16 @@ class Tool_WebGetHTML {
 // MARK: - Operations
 extension Tool_WebGetHTML {
    func get(path: String,url: String) throws -> String {
+      debug(url)
+      
       let string = try WebGetUtils.getAsString(url: url)
       let markdown = try HTMLToMarkdown.convert(string)
 
       // Now write the content to a file, and return that
       let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".md",data: markdown)
       let response = "The content of the url was converted to markdown and saved to the local file system. The content can be found in the file:"+tempFile
+      
+      debug(response)
       
       return response
    }

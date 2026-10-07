@@ -53,11 +53,16 @@ class ToolArguments {
       self.arguments = arguments
    }
    
-   func asString(_ argument: String,allowEmpty: Bool) throws -> String {
+   func asString(_ argument: String,allowEmpty: Bool,max: Int? = nil) throws -> String {
       if let value = arguments[argument] {
          if let stringValue = value as? String {
             if ( !allowEmpty && stringValue.isEmpty ) {
                let stringError = ToolArgumentError.empty_string(message: "\(argument) is an empty string")
+               logError(stringError)
+               throw stringError
+            } else if ( max != nil && (stringValue.utf8.count > (max ?? 0)) ) {
+               assert((max ?? 0) > 0, "Caller did not provide a valid maximum")
+               let stringError = ToolArgumentError.empty_string(message: "\(argument) exceeds the allowed length, limit to less than or equal to \(max ?? 0)")
                logError(stringError)
                throw stringError
             } else {

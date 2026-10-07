@@ -62,8 +62,8 @@ class Tool_Git {
             "properties": [
                "operation": [
                   "type": "string",
-                  "enum": AnyCodable(GitTool.Input.Operation.allCases.map({$0.rawValue})),
                   "description": "One of the following values:"+GitTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "enum": AnyCodable(GitTool.Input.Operation.allCases.map({$0.rawValue})),
                ],
                "path": [
                   "type": "string",

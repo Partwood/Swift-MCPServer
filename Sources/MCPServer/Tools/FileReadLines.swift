@@ -61,6 +61,8 @@ class Tool_FileReadLines {
    let internalDescriptor: Tool
    let tool: FileReadLinesTool
    
+   static private let MAX_LINES: Int = 100
+   
    public init(serverName: String) {
       self.tool = FileReadLinesTool(serverName: serverName)
       
@@ -73,23 +75,26 @@ class Tool_FileReadLines {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+FileReadLinesTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": FileReadLinesTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "path": [
                   "type": "string",
-                  "description": "The path to a file or directory"
+                  "description": "The absolute directory path to the target file folder (e.g. '/Users/project/src'). Exclude the file name."
                ],
                "name": [
                   "type": "string",
-                  "description": "The file or directory name"
+                  "description": "The exact file name including its extension (e.g. 'main.swift' or 'config.json')."
                ],
                "offset": [
                   "type": "number",
-                  "description": "The integer number of lines from the start"
+                  "description": "The starting position in lines from where the reading begins. Use 0 to start from the beginning.",
+                  "minimum": 0,
                ],
                "length": [
                   "type": "number",
-                  "description": "The integer number of lines to read from the provided offset value. Should not exceed 10"
+                  "description": "The maximum number of lines to retrieve in this single operation. Restrict this to \(Tool_FileReadLines.MAX_LINES) or lower to avoid overflow.",
+                  "maximum": Tool_FileReadLines.MAX_LINES,
                ],
             ],
             "required": ["operation", "path", "name", "offset", "length"]
@@ -123,7 +128,7 @@ extension Tool_FileReadLines {
          if let start = content.index(content.startIndex, offsetBy: Int(offset), limitedBy: content.endIndex) {
             let remainder = String(content[start..<content.endIndex])
             let parts = remainder.components(separatedBy: .newlines).prefix(length)
-            let joined = parts.joined()
+            let joined = parts.joined(separator: "\n")
             subString = joined
          } else {
             let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
@@ -228,7 +233,7 @@ extension Tool_FileReadLines {
       do {
          fileName = try toolArguments.asString(FileReadLinesTool.Input.Arguments.name.rawValue, allowEmpty: false)
          lineOffset = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.offset.rawValue,min: 0)
-         length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: 20)
+         length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: Tool_FileReadLines.MAX_LINES)
 
          offset = try getByteOffset(serverInfo, responseId, lineOffset, path: whichPath, name: fileName)
       } catch {

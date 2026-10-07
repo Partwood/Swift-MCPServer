@@ -203,7 +203,8 @@ struct MCPResponse: Content {
       }
    }
    
-   var toolContent: String? {
+   public
+   var textContent: String? {
       if let result = self.result,
          let mappedValues = result.value as? [String: AnyCodable] {
          if let contentValue: AnyCodable = mappedValues["content"] {
