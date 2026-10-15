@@ -169,14 +169,19 @@ extension Tool_FileFindContent {
          if let FileFindContentString = try FileUtils.readFileToString(atPath: inPath,name: name) {
             let searchResults = find(string: string,content: FileFindContentString)
             
-            var results = [Text_Content]()
+            var results = [String]()
             
-            for result in searchResults {
-               let textContent = Text_Content(text: "Found '" + string + "' on line:\(result.lineNumber) at char offset:\(result.characterOffset), byte offset:\(result.byteOffset)")
-               results.append(textContent)
+            if ( searchResults.isEmpty ) {
+               results.append("Didn't find '" + string + "'")
+            } else {
+               results.append("Found '" + string + "'")
+               for result in searchResults {
+                  let textContent = "- file char offset:\(result.characterOffset), file byte offset:\(result.byteOffset), line:\(result.lineNumber)"
+                  results.append(textContent)
+               }
             }
             
-            return MCPResponse.toolSuccess(id: responseId, content: results, serverInfo: serverInfo)
+            return MCPResponse.toolSuccess(id: responseId, content: [Text_Content(text: results.joined(separator: "\n"))], serverInfo: serverInfo)
          } else {
             let message = "No UTF8 string content present in file:\(name)"
             logWarn(message)

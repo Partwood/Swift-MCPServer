@@ -73,7 +73,8 @@ class Tool_WebGetFile {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+WebGetFileTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": WebGetFileTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "url": [
                   "type": "string",
@@ -103,14 +104,14 @@ extension Tool_WebGetFile {
    ///   - name: The name of the file
    /// - Returns: The path where the file was saved.
    func downloadFile(url: String, path: String, name fileName: String) throws -> String {
-      let data = try WebGetUtils.get(url: url)
+      let data = try WebGetUtils.get(url: url,mimeType: fileName.mimeType())
       
       let fileURL = FileUtils.fileURL(path: path,fileName)
       
       do {
          try data.write(to: fileURL)
          
-         let message = "The file was downloaded and saved to the local file system. It can be found here: \(fileURL.path())"
+         let message = "The file was downloaded and saved to the local file system, it can be found here: '\(fileURL.path())'."
          return message
       } catch {
          logError(error)

@@ -11,6 +11,7 @@ public
 protocol URLProvider {
    var provider: UUID { get }
    var urls: Array<URL> { get }
+   var auxs: Array<URL> { get }
    
    func auxUrls(_ urls: Array<URL>)
 }

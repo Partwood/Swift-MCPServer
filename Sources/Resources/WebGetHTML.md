@@ -1,1 +1,1 @@
-Fetches the raw text as markdown content of a remote web page via HTTP/HTTPS. Strictly use this for public internet web URLs. Do not use this tool to access local files, file:// paths, or localhost targets.
+Fetches the raw text as markdown content of a remote web page via HTTP/HTTPS. Strictly use this for public internet web URLs. Do not use this tool to access local files, file:// paths, or localhost targets. If the URL points to a standard webpage or HTML content, use this tool.

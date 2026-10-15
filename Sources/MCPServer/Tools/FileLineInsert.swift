@@ -74,19 +74,20 @@ class Tool_FileLineInsert {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+FileLineInsertTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": FileLineInsertTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "path": [
                   "type": "string",
-                  "description": "The path to a file or directory"
+                  "description": "The absolute directory path to the target file folder (e.g. '/Users/project/src'). Exclude the file name."
                ],
                "name": [
                   "type": "string",
-                  "description": "The file or directory name"
+                  "description": "The exact file name including its extension (e.g. 'image.png' or 'config.json')."
                ],
                "content": [
                   "type": "string",
-                  "description": "The content to be written"
+                  "description": "The content to be written, including any necessary newlines."
                ],
                "offset": [
                   "type": "number",

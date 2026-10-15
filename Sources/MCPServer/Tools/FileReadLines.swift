@@ -173,11 +173,11 @@ extension Tool_FileReadLines {
          if let content = try FileUtils.readFileToString(atPath: inPath,name: name) {
             FileFindContentString = content
          } else {
-            throw FileIOError.read_error(FileUtils.fileURL(path: inPath, name))
+            throw FileIOError.read_error(FileUtils.fileURL(path: inPath, name),nil)
          }
       } catch {
          logError(error)
-         throw error
+         throw FileIOError.read_error(FileUtils.fileURL(path: inPath, name), error)
       }
       
       let maxByteOffset = FileFindContentString.utf8.count

@@ -38,13 +38,14 @@ struct FileSystemTool: Content {
          case createDirectory = "create_directory"
          case findFile = "recursive_find_file"
          case findDir = "recursive_find_dir"
+         case info = "info"
 //         case deleteFile
 //         case moveFile
 //         case copyFile
          var requiresName: Bool {
             get {
                switch(self){
-               case .findFile,.findDir:
+               case .findFile,.findDir,.info:
                   return true
                default:
                   return false
@@ -52,40 +53,12 @@ struct FileSystemTool: Content {
             }
          }
       }
-      
-      //let operation: Operation
-      //let path: String
-      //let content: String? // For write operations
-      //let newPath: String? // For move/copy operations
    }
    
    init(serverName: String) {
       name = "mcp_"+serverName+"_"+FileSystemTool.resourceName.lowercased()
    }
 }
-
-//enum Tool_FileSystem_Error: LocalizedError {
-//   case path_is_directory(_ url: URL)
-//   case path_is_file(_ url: URL)
-//   case invalid_pattern(_ pattern: String)
-//
-//   public var errorDescription: String? {
-//      return description
-//   }
-//}
-//
-//extension Tool_FileSystem_Error: CustomStringConvertible {
-//   var description: String {
-//      switch(self) {
-//      case .path_is_directory(let url):
-//         return NSLocalizedString("Operation error: '\(url)' is a directory", comment: "Unexpected directory")
-//      case .path_is_file(let url):
-//         return NSLocalizedString("Operation error: '\(url)' is a file", comment: "Unexpected file")
-//      case .invalid_pattern(let pattern):
-//         return NSLocalizedString("Operation error: Invalid wildcard pattern '\(pattern)'", comment: "Invalid pattern")
-//      }
-//   }
-//}
 
 final
 class Tool_FileSystem {
@@ -109,11 +82,11 @@ class Tool_FileSystem {
                ],
                "path": [
                   "type": "string",
-                  "description": "The location on disk, using the appropriate format for mac, windows or linux"
+                  "description": "The absolute directory path to the target file folder (e.g. '/Users/project/src'). Exclude the file name."
                ],
                "name": [
                   "type": "string",
-                  "description": "The file or directory name to find within the path provided"
+                  "description": "The exact file name including its extension (e.g. 'main.swift' or 'config.json')."
                ],
             ],
             "required": ["operation", "path"]
@@ -152,7 +125,12 @@ extension Tool_FileSystem {
       case text
       case jpeg
       case png
+      case mp3
+      case mp4
+      case avi
+      case wav
       case markdown
+      case html
       case unknown
    }
    
@@ -180,11 +158,37 @@ extension Tool_FileSystem {
             return .png
          }
          
+         // Check for MP3 ID3 tag
+         if byteArray.count >= 3 && byteArray[0] == 0x49 && byteArray[1] == 0x44 && byteArray[2] == 0x33 {
+            return .mp3
+         }
+         
+         // Check for WAV file: RIFF header followed by "WAVE"
+         if byteArray.count >= 12 && byteArray[0] == 0x52 && byteArray[1] == 0x49 && byteArray[2] == 0x46 && byteArray[3] == 0x46
+               && byteArray[8] == 0x57 && byteArray[9] == 0x41 && byteArray[10] == 0x56 && byteArray[11] == 0x45 {
+            return .wav
+         }
+         
+         // Check for MP4 file: ftyp followed by mp41 or similar
+         if byteArray.count >= 8 && byteArray[4] == 0x66 && byteArray[5] == 0x74 && byteArray[6] == 0x79 && byteArray[7] == 0x70 {
+            return .mp4
+         }
+         
+         // Check for AVI file: RIFF header followed by "AVI "
+         if byteArray.count >= 8 && byteArray[0] == 0x52 && byteArray[1] == 0x49 && byteArray[2] == 0x46 && byteArray[3] == 0x46
+               && byteArray[8] == 0x41 && byteArray[9] == 0x56 && byteArray[10] == 0x49 && byteArray[11] == 0x20 {
+            return .avi
+         }
+         
          // Attempt to decode as UTF-8 text
          if let string = String(data: data, encoding: .utf8) {
             // Check for Markdown patterns (e.g., starts with # or ---)
             if string.hasPrefix("#") || string.hasPrefix("---") {
                return .markdown
+            }
+            // Check for HTML content
+            if string.lowercased().hasPrefix("<html") || string.lowercased().hasPrefix("<!doctype html") {
+               return .html
             }
             return .text
          }
@@ -194,41 +198,76 @@ extension Tool_FileSystem {
       
       return .unknown
    }
+   
+   private func getFileType(_ type: FileAttributeType) -> String {
+      switch type {
+      case .typeRegular:
+         return "file"
+      case .typeDirectory:
+         return "directory"
+      case .typeSymbolicLink:
+         return "symbolic_link"
+      default:
+         return "\(type.rawValue)"
+      }
+   }
 
-   private func getAttributes(fileManager: FileManager,decodedRoot: String,file: URL) throws -> Text_Content {
+   private func getAttributes(fileManager: FileManager,decodedRoot: String,file: URL,simple: Bool) throws -> Text_Content {
       let decodedPath: String = (file.path() as NSString).removingPercentEncoding ?? file.path()
       
       let attributes = try fileManager.attributesOfItem(atPath: decodedPath)
       
       let fileAttributes: Text_Content
       
+      guard let fileType = attributes[FileAttributeKey.type] as? FileAttributeType else {
+         let attributeError = FileIOError.attributes_not_found(file,nil)
+         logError(attributeError)
+         throw attributeError
+      }
+      
       let isDirectory = (try? file.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
       if ( isDirectory ) {
-         if let fileType = attributes[FileAttributeKey.type] as? String,
-            let _ = attributes[FileAttributeKey.creationDate] as? Date,
-            let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-            let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
-            
-            fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)' is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) in directory '\(decodedRoot)'")
+         var typeInfo: String = ""
+         if ( fileType != .typeDirectory ) {
+            typeInfo = " with type \(getFileType(fileType)) "
+         }
+         
+         if simple {
+            fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)'\(typeInfo).")
          } else {
-            let attributeError = FileIOError.attributes_not_found(file)
-            logError(attributeError)
-            throw attributeError
+            if let _ = attributes[FileAttributeKey.creationDate] as? Date,
+               let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
+               let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
+               
+               fileAttributes = Text_Content(text: "Directory '\(file.lastPathComponent)'\(typeInfo) is modified \(modifiedDate.timeIntervalSince1970).")
+            } else {
+               let attributeError = FileIOError.attributes_not_found(file)
+               logError(attributeError)
+               throw attributeError
+            }
          }
       } else {
-         if let fileSize = attributes[FileAttributeKey.size] as? Int64,
-            let fileType = attributes[FileAttributeKey.type] as? String,
-            let _ = attributes[FileAttributeKey.creationDate] as? Date,
-            let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
-            let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
-            
-            let contentType = identifyFileType(at: file)
-            
-            fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)' has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) with type \(fileType) and content type \(contentType) in directory '\(decodedRoot)'")
+         var typeInfo: String = ""
+         if ( fileType != .typeRegular ) {
+            typeInfo = " with type \(getFileType(fileType)) "
+         }
+         
+         if simple {
+            fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)'\(typeInfo).")
          } else {
-            let attributeError = FileIOError.attributes_not_found(file)
-            logError(attributeError)
-            throw attributeError
+            if let fileSize = attributes[FileAttributeKey.size] as? Int64,
+               let _ = attributes[FileAttributeKey.creationDate] as? Date,
+               let modifiedDate = attributes[FileAttributeKey.modificationDate] as? Date,
+               let _ = attributes[FileAttributeKey.posixPermissions] as? Int {
+               
+               let contentType = identifyFileType(at: file)
+               
+               fileAttributes = Text_Content(text: "File '\(file.lastPathComponent)'\(typeInfo) has size \(fileSize) is modified \(modifiedDate.timeIntervalSince1970) withd content type \(contentType).")
+            } else {
+               let attributeError = FileIOError.attributes_not_found(file)
+               logError(attributeError)
+               throw attributeError
+            }
          }
       }
       
@@ -249,7 +288,7 @@ extension Tool_FileSystem {
       if ( pathURL.isExisting() ) {
          do {
             if ( try pathURL.isExistingFile() ) {
-               let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: pathURL)
+               let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: pathURL,simple: true)
                
                files.append(fileAttributes)
                
@@ -272,21 +311,51 @@ extension Tool_FileSystem {
          // Get contents (files and subfolders)
          let directoryContents = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil)
          
-         let _ = directoryContents.map { file in
+         let contents: [String] = directoryContents.compactMap { file in
             if ( file.lastPathComponent.hasPrefix(".") ) {
                // Ignore any file that starts with .
-               return
+               return nil
             }
             
             do {
-               let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: file)
+               let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: file, simple: true)
                
-               files.append(fileAttributes)
+               return "- \(fileAttributes.text.value)"
             } catch {
                logError(error)
                debug("Ignoring the prior error as it is on an individual file in a list of files.")
+               return nil
             }
          }
+         
+         files.append(Text_Content(text: contents.joined(separator: "\n")))
+      } catch {
+         logError(error)
+         return MCPResponse.toolError(id: responseId, message: "\(error.localizedDescription)",serverInfo: serverInfo)
+      }
+      
+      return MCPResponse.toolSuccess(id: responseId, content: files,serverInfo: serverInfo)
+   }
+   
+   func info(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String) -> MCPResponse {
+      let fileManager = FileManager.default
+      
+      let path = NSString(string: inPath).expandingTildeInPath
+      let decodedRoot: String = path.removingPercentEncoding ?? path
+      let pathURL = URL(fileURLWithPath: decodedRoot).appendingPathComponent(name)
+      
+      var files = Array<Text_Content>()
+      
+      if ( !pathURL.isExisting() ) {
+         let missing = FileIOError.directory_not_found(pathURL)
+         logError(missing)
+         return MCPResponse.toolError(id: responseId, message: "\(missing.localizedDescription)",serverInfo: serverInfo)
+      }
+      
+      do {
+         let fileAttributes = try getAttributes(fileManager: fileManager, decodedRoot: decodedRoot, file: pathURL,simple: false)
+         
+         files.append(fileAttributes)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: "\(error.localizedDescription)",serverInfo: serverInfo)
@@ -321,7 +390,7 @@ extension Tool_FileSystem {
    func find(_ serverInfo: ServerInfo,_ responseId: String,in rootPath: String,named pattern: String,directory: Bool) -> MCPResponse {
       let expandedRootPath = NSString(string: rootPath).expandingTildeInPath
       let fileManager = FileManager.default
-      var foundFiles = [Text_Content]()
+      var foundFiles = Array<String>()
       
       do {
          // Get the contents of the root directory
@@ -335,7 +404,7 @@ extension Tool_FileSystem {
                let matches: Bool = try matchesWildcard(item.lastPathComponent,pattern: pattern)
                if ( matches ) {
                   // Found the file/directory directly in the root
-                  foundFiles.append(Text_Content(text: "Found match to '" + pattern + "' at path: " + item.path))
+                  foundFiles.append("Found match to '" + pattern + "' at path: " + item.path)
                }
             }
             
@@ -356,13 +425,13 @@ extension Tool_FileSystem {
       if foundFiles.isEmpty {
          return MCPResponse.toolSuccess(id: responseId, text: "No file or directory matching '" + pattern + "' found in '" + rootPath + "'", serverInfo: serverInfo)
       } else {
-         return MCPResponse.toolSuccess(id: responseId, content: foundFiles, serverInfo: serverInfo)
+         return MCPResponse.toolSuccess(id: responseId, content: [Text_Content(text: foundFiles.joined(separator: "\n"))], serverInfo: serverInfo)
       }
    }
 
-   private func find(in directoryPath: String, named pattern: String,directory: Bool) throws -> [Text_Content] {
+   private func find(in directoryPath: String, named pattern: String,directory: Bool) throws -> Array<String> {
       let fileManager = FileManager.default
-      var foundItems = [Text_Content]()
+      var foundItems = Array<String>()
       
       do {
          let directoryURL = URL(fileURLWithPath: directoryPath)
@@ -374,7 +443,7 @@ extension Tool_FileSystem {
             if ( directory == isDirectory ) {
                let matches: Bool = try matchesWildcard(item.lastPathComponent,pattern: pattern)
                if ( matches ) {
-                  foundItems.append(Text_Content(text: "Found match to '" + pattern + "' at path: " + item.path))
+                  foundItems.append("Found match to '" + pattern + "' at path: " + item.path)
                }
             }
 
@@ -413,6 +482,8 @@ extension Tool_FileSystem {
       switch operation {
       case .listDirectory:
          return listDirectory(serverInfo,responseId,at: whichPath)
+      case .info:
+         return info(serverInfo,responseId,at: whichPath, name: name)
       case .createDirectory:
          return createDir(serverInfo,responseId,at: whichPath)
       case .findFile:

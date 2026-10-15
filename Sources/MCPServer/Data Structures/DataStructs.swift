@@ -38,11 +38,11 @@ struct ServerInfo {
 public
 struct Text_Content: Content {
    let type: String
-   let text: String
+   let text: RawJSONString
    
    public init(type: String = "text", text: String) {
       self.type = type
-      self.text = text
+      self.text = RawJSONString(text)
    }
    
    func toAnyCodable() -> AnyCodable {
@@ -204,12 +204,12 @@ struct MCPResponse: Content {
    }
    
    public
-   var textContent: String? {
+   var textContent: RawJSONString? {
       if let result = self.result,
          let mappedValues = result.value as? [String: AnyCodable] {
          if let contentValue: AnyCodable = mappedValues["content"] {
             if let textContent = contentValue.value as? [Text_Content] {
-               return textContent.map({ $0.text }).joined(separator: ", ")
+               return RawJSONString(textContent.map({ $0.text.value }).joined(separator: ", "))
             } else if let textContent = contentValue.value as? Text_Content {
                return textContent.text
             }
@@ -218,10 +218,78 @@ struct MCPResponse: Content {
       
       return nil
    }
+   
+   public
+   func stringResponse() throws -> String {
+      var allTextContent: String?
+      if let result = self.result,
+         let mappedValues = result.value as? [String: AnyCodable] {
+         if let contentValue: AnyCodable = mappedValues["content"] {
+            if let textContent = contentValue.value as? [Text_Content] {
+               allTextContent = textContent.map({ $0.text.value }).joined(separator: "\n")
+            } else if let textContent = contentValue.value as? Text_Content {
+               allTextContent = textContent.text.value
+            }
+         }
+      }
+
+      if self.isToolError {
+         return "{\"status\": \"error\", \"message\": \"\(allTextContent ?? "")\"}"
+      } else {
+         return allTextContent ?? ""
+      }
+   }
 }
 
 struct MCPError: Content {
    let code: Int
    let message: String
    let data: [String: AnyCodable]?
+}
+
+// This is used to allow for cases there the contained content could be json, to prevent slashes from growing as it is encoded/decoded over and over.
+public
+struct RawJSONString: Codable, Sendable {
+   public let value: String
+   
+   public
+   init(_ value: String) {
+      self.value = value
+   }
+   
+   // Decode normally as a standard string
+   public
+   init(from decoder: Decoder) throws {
+      let container = try decoder.singleValueContainer()
+      self.value = try container.decode(String.self)
+   }
+   
+   // Encode as RAW unescaped data instead of a safe string
+   public
+   func encode(to encoder: Encoder) throws {
+      var container = encoder.singleValueContainer()
+      
+      guard let data = value.data(using: .utf8) else {
+         throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: encoder.codingPath, debugDescription: "Invalid UTF-8 data"))
+      }
+      
+      try withExtendedLifetime((
+         try? JSONSerialization.jsonObject(with: data, options: []),
+         data
+      )) { (jsonObject, originalData) -> Void in
+         if let jsonObject = jsonObject {
+            // If it's valid JSON, inject it raw without escaping anything
+            // Re-encode the JSON object without escaping slashes.
+            guard let cleanData = try? JSONSerialization.data(withJSONObject: jsonObject, options: [.withoutEscapingSlashes]),
+                  let cleanString = String(data: cleanData, encoding: .utf8) else {
+               throw EncodingError.invalidValue(value, EncodingError.Context(codingPath: encoder.codingPath, debugDescription: "Failed to serialize JSON data"))
+            }
+            try container.encode(cleanString)
+            return
+         }
+         
+         // Fallback to encoding the original value.
+         try container.encode(value)
+      }
+   }
 }

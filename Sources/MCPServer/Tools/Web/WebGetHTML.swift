@@ -91,7 +91,7 @@ extension Tool_WebGetHTML {
 
       // Now write the content to a file, and return that
       let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".md",data: markdown)
-      let response = "The content of the url was converted to markdown and saved to the local file system. The content can be found in the file:"+tempFile
+      let response = "The content of the url '\(url)' was saved as markdown. Use file operations to read the content in file: '\(tempFile)'"
       
       debug(response)
       

@@ -67,16 +67,30 @@ class FileUtils {
    }
 
    public static func fileURL(path inPath: String,_ name: String) -> URL {
+//      // Convert the tilde path (~/) to an absolute path
+//      let expandedPath = NSString(string: inPath).expandingTildeInPath
+//      let root = URL(fileURLWithPath: expandedPath)
+//      
+//      if root.lastPathComponent == name {
+//         // Allow for cases where the name is already part of the path
+//         return root
+//      } else {
+//         return root.appendingPathComponent(name)
+//      }
       // Convert the tilde path (~/) to an absolute path
       let expandedPath = NSString(string: inPath).expandingTildeInPath
-      let root = URL(fileURLWithPath: expandedPath)
       
-      if root.lastPathComponent == name {
-         // Allow for cases where the name is already part of the path
-         return root
-      } else {
-         return root.appendingPathComponent(name)
+      // Ensure the path ends with a separator
+      var fullPath = expandedPath
+      if !fullPath.hasSuffix("/") {
+         fullPath += "/"
       }
+      
+      // Combine the path and name without URL encoding
+      let combinedPath = fullPath + name
+      
+      // Create the URL directly from the combined path
+      return URL(fileURLWithPath: combinedPath)
    }
 
    public static func readFileToString(atPath path: String,name: String) throws -> String? {
@@ -95,8 +109,8 @@ class FileUtils {
          // Convert to String using UTF-8 encoding
          return String(data: fileData, encoding: .utf8)
       } catch {
-         logError("Error reading file:'\(fileURL.path)' error:'\(error.localizedDescription)'")
-         throw error
+         logError("Error reading file:'\(fileURL.path())' error:'\(error.localizedDescription)'")
+         throw FileIOError.read_error(fileURL,error)
       }
    }
 }

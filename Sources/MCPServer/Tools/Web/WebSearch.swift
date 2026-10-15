@@ -95,7 +95,7 @@ extension Tool_WebSearch {
       
       // Now write the content to a file, and return that
       let tempFile = try FileUtils().writeToTempFile(path: path,ext: ".md",data: markdown)
-      let response = "The results of the search were converted to markdown and saved to the local file system. The results can be found in the file:"+tempFile
+      let response = "The results of the search '\(query)' were saved as markdown. Use file operations to read the file: '\(tempFile)'"
       
       debug(response)
       
@@ -109,10 +109,7 @@ extension Tool_WebSearch {
                                 query: String) -> MCPResponse {
       do {
          let result: String = try search(path: path,query: query)
-         
-         let value = Text_Content(text: result)
-         
-         return MCPResponse.toolSuccess(id: responseId, content: [value],serverInfo: serverInfo)
+         return MCPResponse.toolSuccess(id: responseId, content: [Text_Content(text: result)],serverInfo: serverInfo)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription,serverInfo: serverInfo)

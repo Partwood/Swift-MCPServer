@@ -11,10 +11,10 @@ public
 enum FileIOError: LocalizedError {
    case path_is_directory(_ url: URL)
    case path_is_file(_ url: URL)
-   case read_error(_ url: URL)
-   case file_not_found(_ url: URL)
-   case directory_not_found(_ url: URL)
-   case attributes_not_found(_ url: URL)
+   case read_error(_ url: URL,_ root: Error? = nil)
+   case file_not_found(_ url: URL,_ root: Error? = nil)
+   case directory_not_found(_ url: URL,_ root: Error? = nil)
+   case attributes_not_found(_ url: URL,_ root: Error? = nil)
 
    public var errorDescription: String? {
       return description
@@ -22,23 +22,37 @@ enum FileIOError: LocalizedError {
 }
 
 extension FileIOError: CustomStringConvertible {
+   private func getSuffix(_ inError: Error?) -> String {
+      if let inError {
+         return ", error:\(inError.localizedDescription)"
+      } else {
+         return ""
+      }
+   }
+   
    public
    var description: String {
       let localizedMessage: String
       
       switch(self) {
       case .path_is_directory(let url):
-         localizedMessage = NSLocalizedString("'\(url.path())' is a directory", comment: "Unexpected type")
+         let suffix: String = ""
+         localizedMessage = NSLocalizedString("'\(url.path())' is a directory"+suffix, comment: "Unexpected type")
       case .path_is_file(let url):
-         localizedMessage = NSLocalizedString("'\(url.path())' is a file", comment: "Unexpected type")
-      case .read_error(let url):
-         localizedMessage = NSLocalizedString("Failed to read file '\(url.path())'", comment: "Read error")
-      case .file_not_found(let url):
-         localizedMessage = NSLocalizedString("File not found for url: '\(url.path())'", comment: "Not found")
-      case .directory_not_found(let url):
-         localizedMessage = NSLocalizedString("Directory not found for url: '\(url.path())'", comment: "Not found")
-      case .attributes_not_found(let url):
-         localizedMessage = NSLocalizedString("Attributes not found for url: '\(url.path())'", comment: "Attribute error")
+         let suffix: String = ""
+         localizedMessage = NSLocalizedString("'\(url.path())' is a file"+suffix, comment: "Unexpected type")
+      case .read_error(let url,let root):
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Failed to read file '\(url.path())'"+suffix, comment: "Read error")
+      case .file_not_found(let url,let root):
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("File not found for url: '\(url.path())'"+suffix, comment: "Not found")
+      case .directory_not_found(let url,let root):
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Directory not found for url: '\(url.path())'"+suffix, comment: "Not found")
+      case .attributes_not_found(let url,let root):
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Attributes not found for url: '\(url.path())'"+suffix, comment: "Attribute error")
       }
       
       return localizedMessage
