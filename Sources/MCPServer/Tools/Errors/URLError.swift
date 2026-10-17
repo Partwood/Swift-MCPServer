@@ -38,26 +38,33 @@ extension URLError: CustomStringConvertible {
       
       switch(self) {
       case .invalid(let urlString,let root):
-         localizedMessage = NSLocalizedString("Invalid URL:'\(urlString)'", comment: "Invalid url")
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Invalid URL:'\(urlString)'"+suffix, comment: "Invalid url")
       case .response_invalid(let url, let message,let root):
          let suffix: String = getSuffix(root)
          localizedMessage = NSLocalizedString("Response invalid for URL:'\(url.absoluteString)' \(message)"+suffix, comment: "Invalid response")
       case .status_code(let url,let statusCode,let root):
-         localizedMessage = NSLocalizedString("HTTP request returned status code \(statusCode) for URL:'\(url.absoluteString)'", comment: "Status code")
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("HTTP request returned status code \(statusCode) for URL:'\(url.absoluteString)'"+suffix, comment: "Status code")
       case .no_content(let url,let statusCode,let root):
+         let suffix: String = getSuffix(root)
          if let status = statusCode {
-            localizedMessage = NSLocalizedString("HTTP request returned status code \(status), no content for URL:'\(url.absoluteString)'", comment: "<code>, no content")
+            localizedMessage = NSLocalizedString("HTTP request returned status code \(status), no content for URL:'\(url.absoluteString)'"+suffix, comment: "<code>, no content")
          } else {
-            localizedMessage = NSLocalizedString("No content found for URL:'\(url.absoluteString)'", comment: "204, no content")
+            localizedMessage = NSLocalizedString("No content found for URL:'\(url.absoluteString)'"+suffix, comment: "204, no content")
          }
       case .invalid_content(let url,let expected,let actual,let root):
-         localizedMessage = NSLocalizedString("Invalid content found for URL:'\(url.absoluteString)' expected '\(expected)' but got '\(actual)'", comment: "204, invalid content")
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Invalid content found for URL:'\(url.absoluteString)' expected '\(expected)' but got '\(actual)'"+suffix, comment: "204, invalid content")
       case .does_not_exist(let url,let root):
-         localizedMessage = NSLocalizedString("The file does not exist for URL:'\(url.absoluteString)'", comment: "Does not exist")
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("The file does not exist for URL:'\(url.absoluteString)'"+suffix, comment: "Does not exist")
       case .data(let url, let message,let root):
-         localizedMessage = NSLocalizedString("\(message) for URL:'\(url.absoluteString)'", comment: "Data error")
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("\(message) for URL:'\(url.absoluteString)'"+suffix, comment: "Data error")
       case .file_type(let url,let root):
-         localizedMessage = NSLocalizedString("URL:'\(url.absoluteString)' is a file type, do not use HTTP for files", comment: "Type error")
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("URL:'\(url.absoluteString)' is a file type, do not use HTTP for files"+suffix, comment: "Type error")
       }
       
       return localizedMessage
