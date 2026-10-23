@@ -37,22 +37,22 @@ extension FileIOError: CustomStringConvertible {
       switch(self) {
       case .path_is_directory(let url):
          let suffix: String = ""
-         localizedMessage = NSLocalizedString("'\(url.path())' is a directory"+suffix, comment: "Unexpected type")
+         localizedMessage = NSLocalizedString("'\(url.path(percentEncoded: false))' is a directory"+suffix, comment: "Unexpected type")
       case .path_is_file(let url):
          let suffix: String = ""
-         localizedMessage = NSLocalizedString("'\(url.path())' is a file"+suffix, comment: "Unexpected type")
+         localizedMessage = NSLocalizedString("'\(url.path(percentEncoded: false))' is a file"+suffix, comment: "Unexpected type")
       case .read_error(let url,let root):
          let suffix: String = getSuffix(root)
-         localizedMessage = NSLocalizedString("Failed to read file '\(url.path())'"+suffix, comment: "Read error")
+         localizedMessage = NSLocalizedString("Failed to read file '\(url.path(percentEncoded: false))'"+suffix, comment: "Read error")
       case .file_not_found(let url,let root):
          let suffix: String = getSuffix(root)
-         localizedMessage = NSLocalizedString("File not found for url: '\(url.path())'"+suffix, comment: "Not found")
+         localizedMessage = NSLocalizedString("File not found for url: '\(url.path(percentEncoded: false))'"+suffix, comment: "Not found")
       case .directory_not_found(let url,let root):
          let suffix: String = getSuffix(root)
-         localizedMessage = NSLocalizedString("Directory not found for url: '\(url.path())'"+suffix, comment: "Not found")
+         localizedMessage = NSLocalizedString("Directory not found for url: '\(url.path(percentEncoded: false))'"+suffix, comment: "Not found")
       case .attributes_not_found(let url,let root):
          let suffix: String = getSuffix(root)
-         localizedMessage = NSLocalizedString("Attributes not found for url: '\(url.path())'"+suffix, comment: "Attribute error")
+         localizedMessage = NSLocalizedString("Attributes not found for url: '\(url.path(percentEncoded: false))'"+suffix, comment: "Attribute error")
       }
       
       return localizedMessage

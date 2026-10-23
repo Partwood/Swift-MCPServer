@@ -148,12 +148,12 @@ extension Tool_FileReadBytes {
             let end = content.index(content.startIndex, offsetBy: Int(offset+length), limitedBy: content.endIndex) ?? content.endIndex
             subString = String(content[start..<end])
          } else {
-            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
+            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
             logError(message)
             return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
       } else {
-         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path())'")
+         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'")
          subString = ""
       }
 
@@ -161,7 +161,7 @@ extension Tool_FileReadBytes {
          FileReadBytes = Text_Content(text: content)
          fullContent.append(FileReadBytes)
       } else {
-         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
+         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
       }

@@ -131,12 +131,12 @@ extension Tool_FileReadLines {
             let joined = parts.joined(separator: "\n")
             subString = joined
          } else {
-            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
+            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
             logError(message)
             return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
       } else {
-         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path())'")
+         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'")
          subString = ""
       }
 
@@ -144,7 +144,7 @@ extension Tool_FileReadLines {
          FileReadLines = Text_Content(text: content)
          fullContent.append(FileReadLines)
       } else {
-         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
+         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
       }

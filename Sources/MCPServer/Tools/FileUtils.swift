@@ -109,7 +109,7 @@ class FileUtils {
          // Convert to String using UTF-8 encoding
          return String(data: fileData, encoding: .utf8)
       } catch {
-         logError("Error reading file:'\(fileURL.path())' error:'\(error.localizedDescription)'")
+         logError("Error reading file:'\(fileURL.path(percentEncoded: false))' error:'\(error.localizedDescription)'")
          throw FileIOError.read_error(fileURL,error)
       }
    }
@@ -145,12 +145,12 @@ extension FileUtils {
 
             return FileReadResult.success(FileRead(content: fullContent))
          } else {
-            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
+            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
             logWarn(message)
             return FileReadResult.failure(FileReadError.eof(message: message))
          }
       } else {
-         let message = "No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path())'"
+         let message = "No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
          logWarn(message)
          return FileReadResult.failure(FileReadError.eof(message: message))
       }
