@@ -121,13 +121,21 @@ extension Tool_FileFindContent {
       return matchedRanges
    }
    
-   private func find(string pattern: String,content: String,caseInsensitive: Bool = true) -> [SearchResult] {
+   private func find(string pattern: String,content: String,caseInsensitive: Bool = true) throws -> [SearchResult] {
       // Convert the input pattern to a regular expression.
       // This allows the caller to use wildcards like `*.` or regex variants like `a{2,}?`.
-      let regex = try! NSRegularExpression (
-         pattern: pattern,
-         options: caseInsensitive ? [.caseInsensitive, .anchorsMatchLines] : [.anchorsMatchLines]
-      )
+      let regex: NSRegularExpression
+      
+      do {
+         regex = try NSRegularExpression (
+            pattern: pattern,
+            options: caseInsensitive ? [.caseInsensitive, .anchorsMatchLines] : [.anchorsMatchLines]
+         )
+      } catch {
+         let regExError = RegExError.invalid_pattern(pattern, error)
+         logError(regExError)
+         throw regExError
+      }
       
       var results: [SearchResult] = []
       let lines = content.components(separatedBy: "\n")
@@ -167,7 +175,7 @@ extension Tool_FileFindContent {
    func findContent(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,find string:String) -> MCPResponse {
       do {
          if let FileFindContentString = try FileUtils.readFileToString(atPath: inPath,name: name) {
-            let searchResults = find(string: string,content: FileFindContentString)
+            let searchResults = try find(string: string,content: FileFindContentString)
             
             var results = [String]()
             
