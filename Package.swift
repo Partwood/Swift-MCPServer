@@ -40,6 +40,7 @@ let package = Package(
                .process("Resources/FileReadLines.md"),
                .process("Resources/FileInlineInsert.md"),
                .process("Resources/FileLineInsert.md"),
+               .process("Resources/FileLineRemove.md"),
                .process("Resources/FileSystem.md"),
                .process("Resources/WebSearch.md"),
                .process("Resources/WebGetHTML.md"),

@@ -44,11 +44,6 @@ struct FileLineInsertTool: Content {
          case name = "name"
          case path = "path"
       }
-
-      //let operation: Operation
-      //let path: String
-      //let name: String
-      //let content: String? // For write operations
    }
    
    init(serverName: String) {

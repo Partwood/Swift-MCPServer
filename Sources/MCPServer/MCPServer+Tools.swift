@@ -42,6 +42,9 @@ extension SwiftMCPServer {
       mcpTool = Tool_FileLineInsert(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
+      mcpTool = Tool_FileLineRemove(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+
       mcpTool = Tool_TeamCity(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       
