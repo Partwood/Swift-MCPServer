@@ -328,7 +328,7 @@ extension Tool_FileSystem {
             }
          }
          
-         files.append(Text_Content(text: contents.joined(separator: "\n")))
+         files.append(Text_Content(text: contents.sorted().joined(separator: "\n")))
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: "\(error.localizedDescription)",serverInfo: serverInfo)

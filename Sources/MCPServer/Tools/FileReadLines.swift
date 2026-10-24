@@ -113,36 +113,34 @@ extension Tool_FileReadLines {
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
 
-      let subString: String?
+      var subString: String = "Path:'\(FileUtils.fileURL(path: inPath,name).filePath)'\n"
       
       if let content: String = fullContent {
          let components: Array<String> = content.components(separatedBy: .newlines)
          
          if components.count < (offset-1) {
-            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).filePath)'"
-            logError(message)
-            return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
+            subString = "End of file.\n"
+         } else {
+            if components.count < (offset+length) {
+               // Caller asked for more than exists, just return whats left
+               components[offset...].enumerated().forEach({ eComponent in
+                  let value = "Line \(eComponent.offset+offset+1):" + eComponent.element + "\n"
+                  subString += value
+               })
+            } else {
+               components[offset..<(offset+length)].enumerated().forEach({ eComponent in
+                  let value = "Line \(eComponent.offset+offset+1):" + eComponent.element + "\n"
+                  subString += value
+               })
+            }
          }
          
-         if components.count < (offset+length) {
-            // Caller asked for more than exists, just return whats left
-            subString = (components[offset...]).joined(separator: "\n")
-         } else {
-            subString = (components[offset..<(offset+length)]).joined(separator: "\n")
-         }
       } else {
          logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).filePath)'")
          subString = ""
       }
 
-      let text_content: Text_Content
-      if let content = subString {
-         text_content = Text_Content(text: content.hasSuffix("\n") ? content: content+"\n")
-      } else {
-         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).filePath)'"
-         logError(message)
-         return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
-      }
+      let text_content: Text_Content = Text_Content(text: subString.hasSuffix("\n") ? subString: subString+"\n")
       
       return MCPResponse.toolSuccess(id: responseId, content: [text_content],serverInfo: serverInfo)
    }
@@ -151,7 +149,6 @@ extension Tool_FileReadLines {
 extension Tool_FileReadLines {
    private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: FileReadLinesTool.Input.Operation,_ whichPath: String) -> MCPResponse {
       let fileName: String
-      //let lineOffset: Int
       let length: Int
       let offset: Int
 
@@ -159,8 +156,6 @@ extension Tool_FileReadLines {
          fileName = try toolArguments.asString(FileReadLinesTool.Input.Arguments.name.rawValue, allowEmpty: false)
          offset = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.offset.rawValue,min: 0)
          length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: Tool_FileReadLines.MAX_LINES)
-
-         //offset = try getByteOffset(serverInfo, responseId, lineOffset, path: whichPath, name: fileName)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: "For operation:'\(operation.rawValue)' \(error.localizedDescription)", serverInfo: serverInfo)

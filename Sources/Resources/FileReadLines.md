@@ -1,1 +1,1 @@
-Reads a specific range of lines from a text file. Use this tool for structured text files, source code, and logs where line numbers are meaningful.
+Reads a specific range of lines from a text file. Use this tool for structured text files, source code, and logs where line numbers are meaningful. When reading returned content newlines followed by other newlines are actually multiple lines, they just don't have any content (besides the newline). Line numbers are not zero indexed, they are 1 indexed (first line is 1 not 0)

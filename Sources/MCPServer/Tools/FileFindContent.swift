@@ -186,7 +186,7 @@ extension Tool_FileFindContent {
                   result.append(contentsOf: findContent(at: fileURL, content: content))
                } else {
                   if findContentInFile(in: fileURL, content: content) {
-                     result.append("- file:'\(fileURL.path(percentEncoded: false))'")
+                     result.append("- Path:'\(fileURL.filePath)'")
                   }
                }
             } catch {

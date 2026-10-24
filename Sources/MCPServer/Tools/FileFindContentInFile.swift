@@ -106,24 +106,6 @@ extension Tool_FileFindContentInFile {
       // Perform the search.
       let matches = content.matches(of: regex)
       return matches.map { $0.range }
-//      let matches = regex.matches(
-//         in: content,
-//         range: NSRange(content.startIndex..., in: content)
-//      )
-      
-      // Extract the matched substrings.
-//      let matchedRanges: [Range<String.Index>] = matches.compactMap({ match in
-//         let range = match.range
-//         //let range = match.range(at: 0)
-//         
-//         if let stringRange = Range(range, in: content) {
-//            return stringRange
-//         }
-//         
-//         return nil
-//      })
-//      
-//      return matchedRanges
    }
    
    private func find(string pattern: String,content: String,caseInsensitive: Bool = true) throws -> [SearchResult] {
@@ -132,10 +114,7 @@ extension Tool_FileFindContentInFile {
       //let regex: Regex//: NSRegularExpression
       
       do {
-         let regex = try Regex(pattern)//NSRegularExpression (
-            //pattern: pattern,
-            //options: caseInsensitive ? [.caseInsensitive, .anchorsMatchLines] : [.anchorsMatchLines]
-         //)
+         let regex = try Regex(pattern)
 
          var results: [SearchResult] = []
          let lines = content.components(separatedBy: "\n")
@@ -188,9 +167,10 @@ extension Tool_FileFindContentInFile {
             if ( searchResults.isEmpty ) {
                results.append("Didn't find '" + string + "'")
             } else {
+               results.append("Path:'\(FileUtils.fileURL(path: inPath,name).filePath)'")
                results.append("Found '" + string + "'")
                for result in searchResults {
-                  let textContent = "- file char offset:\(result.characterOffset), file byte offset:\(result.byteOffset), line:\(result.lineNumber)"
+                  let textContent = "- line:\(result.lineNumber), char offset:\(result.characterOffset), byte offset:\(result.byteOffset)"
                   results.append(textContent)
                }
             }
