@@ -35,6 +35,7 @@ let package = Package(
             resources: [
                .process("Resources/FileAppend.md"),
                .process("Resources/FileFindContent.md"),
+               .process("Resources/FileFindContentInFile.md"),
                .process("Resources/FileReadBytes.md"),
                .process("Resources/FileReadLines.md"),
                .process("Resources/FileInlineInsert.md"),
@@ -47,7 +48,10 @@ let package = Package(
         ),
         .testTarget(
             name: "Swift_MCPServerTests",
-            dependencies: ["Swift_MCPServer"]
+            dependencies: ["Swift_MCPServer"],
+            resources: [
+               .copy("MCPServerTests/Resources"),
+            ]
         ),
     ]
 )

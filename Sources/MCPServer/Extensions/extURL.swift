@@ -47,15 +47,19 @@ extension URL {
       return result
    }
 
-   public
    static func getFilePath(_ inPath: String) -> String {
       let path = NSString(string: inPath).expandingTildeInPath
       return path.removingPercentEncoding ?? path
    }
    
-   public
    func getFilePath() -> String {
-      return URL.getFilePath(self.path())
+      return URL.getFilePath(self.path(percentEncoded: false))
+   }
+   
+   public var filePath: String {
+      get {
+         return getFilePath()
+      }
    }
    
    public

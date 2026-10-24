@@ -101,30 +101,7 @@ class Tool_FileLineInsert {
 }
 
 // MARK: Write content
-extension Tool_FileLineInsert {
-   // Trivial case, file does not exist, just create
-   private func writeFile(_ serverInfo: ServerInfo,_ responseId: String, newData: Data,_ fileURL: URL) -> MCPResponse {
-      do {
-         FileManager.default.createFile(atPath: fileURL.path(), contents: nil)
-         
-         let originalHandle = try FileHandle(forWritingTo: fileURL)
-         defer {
-            try? originalHandle.close()
-         }
-         
-         // Write new data
-         try originalHandle.write(contentsOf: newData)
-      } catch {
-         let message = "Error inserting data into file:'\(fileURL.path(percentEncoded: false))', error: \(error.localizedDescription)"
-         logError(message)
-         // Clean up file on error
-         try? FileManager.default.removeItem(at: fileURL)
-         return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
-      }
-      
-      return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path(percentEncoded: false))'" ,serverInfo: serverInfo)
-   }
-   
+extension Tool_FileLineInsert {   
    /**
     Basic logic...
     Given a desination file, read original file up to insert point, write to temp, write insertion, write remainder
@@ -141,7 +118,7 @@ extension Tool_FileLineInsert {
       do {
          isDirectory = try fileURL.isExistingDirectory()
       } catch {
-         let message = "Error inserting data into file:'\(fileURL.path(percentEncoded: false))', error: \(error.localizedDescription)"
+         let message = "Error inserting data into file:'\(fileURL.filePath)', error: \(error.localizedDescription)"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
@@ -152,21 +129,30 @@ extension Tool_FileLineInsert {
          return MCPResponse.toolError(id: responseId,message: error.localizedDescription,serverInfo: serverInfo)
       }
 
-      if !FileManager.default.fileExists(atPath: fileURL.path()) {
+      if !FileManager.default.fileExists(atPath: fileURL.filePath) {
+         // The source file does not exist, simply write to it and return.
          if offset != 0 {
-            let message = "Invalid offset for a file that does not exist '\(fileURL.path(percentEncoded: false))'"
+            let message = "Invalid offset for a file that does not exist '\(fileURL.filePath)'"
             logError(message)
             return MCPResponse.toolError(id: responseId,message: message,serverInfo: serverInfo)
          }
          
-         return writeFile(serverInfo, responseId, newData: newData, fileURL)
+         do {
+            try FileUtils().writeFile(fileURL, data: newData)
+         } catch {
+            let message = "Error inserting data into file:'\(fileURL.filePath)', error: \(error.localizedDescription)"
+            logError(message)
+            return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
+         }
+         
+         return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.filePath)'" ,serverInfo: serverInfo)
       }
       
       let tempFileURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 
       do {
-         if !FileManager.default.fileExists(atPath: tempFileURL.path()) {
-            FileManager.default.createFile(atPath: tempFileURL.path(), contents: nil)
+         if !FileManager.default.fileExists(atPath: tempFileURL.filePath) {
+            FileManager.default.createFile(atPath: tempFileURL.filePath, contents: nil)
          }
          
          let originalHandle = try FileHandle(forReadingFrom: fileURL)
@@ -200,14 +186,14 @@ extension Tool_FileLineInsert {
          try FileManager.default.moveItem(at: tempFileURL, to: fileURL)
          debug("Data inserted successfully at offset \(offset) into file:\(fileURL)")
       } catch {
-         let message = "Error inserting data into file:'\(fileURL.path(percentEncoded: false))', error: \(error.localizedDescription)"
+         let message = "Error inserting data into file:'\(fileURL.filePath)', error: \(error.localizedDescription)"
          logError(message)
          // Clean up temp file on error
          try? FileManager.default.removeItem(at: tempFileURL)
          return MCPResponse.toolError(id: responseId, message: message,serverInfo: serverInfo)
       }
       
-      return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.path(percentEncoded: false))'" ,serverInfo: serverInfo)
+      return MCPResponse.toolSuccess(id: responseId,text: "Completed insertion of content into file '\(fileURL.filePath)'" ,serverInfo: serverInfo)
    }
 }
 

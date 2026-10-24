@@ -209,7 +209,7 @@ struct MCPResponse: Content {
          let mappedValues = result.value as? [String: AnyCodable] {
          if let contentValue: AnyCodable = mappedValues["content"] {
             if let textContent = contentValue.value as? [Text_Content] {
-               return RawJSONString(textContent.map({ $0.text.value }).joined(separator: ", "))
+               return RawJSONString(textContent.map({ $0.text.value }).joined(separator: "\n"))
             } else if let textContent = contentValue.value as? Text_Content {
                return textContent.text
             }

@@ -20,7 +20,7 @@ final class MCPServerToolsTest: XCTestCase {
 
     func testToolList() throws {
        let server = SwiftMCPServer()
-       let response: MCPResponse = server.listTools(1)
+       let response: MCPResponse = server.listTools([:],1)
        debug("response:\(try response.prettyPrintedJSONString)")
        let stringValue = try response.prettyPrintedJSONString
        if let dataValue: Data = stringValue.data(using: .utf8) {

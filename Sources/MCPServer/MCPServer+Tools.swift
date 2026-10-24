@@ -24,6 +24,9 @@ extension SwiftMCPServer {
       mcpTool = Tool_FileFindContent(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
+      mcpTool = Tool_FileFindContentInFile(serverName: self.name)
+      tools[mcpTool.name] = mcpTool
+
       mcpTool = Tool_FileReadBytes(serverName: self.name)
       tools[mcpTool.name] = mcpTool
       

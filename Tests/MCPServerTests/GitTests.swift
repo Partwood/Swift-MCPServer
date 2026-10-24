@@ -34,7 +34,7 @@ final class GitTests: XCTestCase {
       let url = URL(filePath: "/private"+td).appending(path: "gittest")
       
       var isDirectory: ObjCBool = false
-      if FileManager.default.fileExists(atPath: url.path(),isDirectory: &isDirectory) {
+      if FileManager.default.fileExists(atPath: url.path(percentEncoded: false),isDirectory: &isDirectory) {
          if ( isDirectory.boolValue ) {
             try FileManager.default.removeItem(at: url)
          }
@@ -53,10 +53,9 @@ final class GitTests: XCTestCase {
       XCTAssertFalse(jsonString.isEmpty)
       debug(jsonString)
       
-      if let content = result.toolContent {
-         if content.starts(with: "Repository initialized in path '/private") {
-            //url.absoluteURL
-         }
+      let content = try result.stringResponse()
+      if content.starts(with: "Repository initialized in path '/private") {
+         //url.absoluteURL
       }
       
       result = t.g_status(configuration: configuration,pathURL: url)
@@ -72,7 +71,7 @@ final class GitTests: XCTestCase {
       result = t.g_status(configuration: configuration,pathURL: url)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
-      XCTAssertEqual("path:testfile.txt status:workingTreeNew", result.toolContent)
+      XCTAssertEqual("path:testfile.txt status:workingTreeNew", try result.stringResponse())
       jsonString = try result.prettyPrintedJSONString
       XCTAssertFalse(jsonString.isEmpty)
       debug(jsonString)
@@ -87,7 +86,7 @@ final class GitTests: XCTestCase {
       result = t.g_status(configuration: configuration,pathURL: url)
       XCTAssertNil(result.error)
       XCTAssertFalse(result.isToolError)
-      XCTAssertEqual("path:testfile.txt status:indexNew", result.toolContent)
+      XCTAssertEqual("path:testfile.txt status:indexNew", try result.stringResponse())
       jsonString = try result.prettyPrintedJSONString
       XCTAssertFalse(jsonString.isEmpty)
       debug(jsonString)

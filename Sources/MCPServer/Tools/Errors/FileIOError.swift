@@ -12,6 +12,8 @@ enum FileIOError: LocalizedError {
    case path_is_directory(_ url: URL)
    case path_is_file(_ url: URL)
    case read_error(_ url: URL,_ root: Error? = nil)
+   case write_error(_ url: URL,_ root: Error? = nil)
+   case data_error(_ url: URL,_ root: Error? = nil)
    case file_not_found(_ url: URL,_ root: Error? = nil)
    case directory_not_found(_ url: URL,_ root: Error? = nil)
    case attributes_not_found(_ url: URL,_ root: Error? = nil)
@@ -44,6 +46,12 @@ extension FileIOError: CustomStringConvertible {
       case .read_error(let url,let root):
          let suffix: String = getSuffix(root)
          localizedMessage = NSLocalizedString("Failed to read file '\(url.path(percentEncoded: false))'"+suffix, comment: "Read error")
+      case .write_error(let url,let root):
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Failed to write file '\(url.path(percentEncoded: false))'"+suffix, comment: "Write error")
+      case .data_error(let url,let root):
+         let suffix: String = getSuffix(root)
+         localizedMessage = NSLocalizedString("Invalid data for file '\(url.path(percentEncoded: false))'"+suffix, comment: "Data error")
       case .file_not_found(let url,let root):
          let suffix: String = getSuffix(root)
          localizedMessage = NSLocalizedString("File not found for url: '\(url.path(percentEncoded: false))'"+suffix, comment: "Not found")

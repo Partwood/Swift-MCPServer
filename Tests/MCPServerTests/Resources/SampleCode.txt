@@ -1,0 +1,483 @@
+//
+//  MCPServerViewController.swift
+//  Swagentic
+//
+//  Copyright © 2026 JVSherwood. All rights reserved.
+//
+
+import Cocoa
+import Swift_MCPServer
+
+final
+class MCPServerWindowManager: NSWindowController {
+   convenience init() {
+      let contentViewController = MCPServerViewController()
+      let newWindow = NSWindow(
+         contentRect: NSRect(x: 0, y: 0, width: 400, height: 75),
+         styleMask: [.titled, .closable, .miniaturizable, .resizable],
+         backing: .buffered,
+         defer: false
+      )
+      newWindow.title = "MCP Server"
+      newWindow.makeFirstResponder(nil)
+      newWindow.contentViewController = contentViewController
+      self.init(window: newWindow)
+   }
+   
+   override func showWindow(_ sender: Any?) {
+      // Get the main window (assuming it's the key window or main window)
+      if let mainWindow = NSApplication.shared.mainWindow,
+         let screenFrame = NSScreen.main?.visibleFrame,
+         let window = self.window {
+
+         // Calculate position to place this window directly below the main window
+         let mainWindowFrame = mainWindow.frame
+         let newX = mainWindowFrame.origin.x  // Same x position as main window
+         let newY = mainWindowFrame.origin.y - window.frame.height - 5  // Position above main window with some spacing
+
+         // Ensure the window stays on screen
+         var finalX = max(newX, screenFrame.minX)
+         let finalY = max(newY, screenFrame.minY)
+
+         // Make sure the window fits on screen
+         if finalX + window.frame.width > screenFrame.maxX {
+             finalX = screenFrame.maxX - window.frame.width
+         }
+
+         window.setFrame(NSRect(x: finalX, y: finalY, width: window.frame.width, height: window.frame.height), display: true)
+      }
+
+      super.showWindow(sender)
+   }
+}
+
+final
+class MCPServerViewController: NSViewController {
+   var statusTextField: NSTextField?
+   var startStopButton: NSButton?
+   
+   private var innerVerticalStack: NSStackView?
+   
+   override func loadView() {
+      // Create the view for the view controller
+      self.view = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 75))
+      self.view.wantsLayer = true
+      self.view.layer?.backgroundColor = NSColor.systemBlue.cgColor
+      // Add other UI elements programmatically here
+   }
+   
+   private var isServerRunning = true
+
+   func verticalStack(_ callback: @escaping ((_ stackView: NSStackView)->Void)) {
+      let stackView = NSStackView()
+      stackView.translatesAutoresizingMaskIntoConstraints = false
+      stackView.orientation = .vertical
+      
+      callback(stackView)
+   }
+   
+   override func viewDidLoad() {
+      super.viewDidLoad()
+      
+      debug("View DidLoad")
+      
+      verticalStack({ outerVerticalStack in
+         self.view.addSubview(outerVerticalStack)
+         
+         NSLayoutConstraint.activate([
+            outerVerticalStack.topAnchor.constraint(equalTo: self.view.topAnchor,constant: 5.0),
+            outerVerticalStack.leftAnchor.constraint(equalTo: self.view.leftAnchor,constant: 5.0),
+            outerVerticalStack.bottomAnchor.constraint(equalTo: self.view.bottomAnchor,constant: -5.0),
+            outerVerticalStack.rightAnchor.constraint(equalTo: self.view.rightAnchor,constant: -5.0)
+         ])
+
+         let stackView = NSStackView()
+         stackView.translatesAutoresizingMaskIntoConstraints = false
+         stackView.orientation = .horizontal
+         
+         outerVerticalStack.addArrangedSubview(stackView)
+
+         let button = NSButton(title: "Stop Server", target: self, action: #selector(self.buttonClicked))
+         
+         stackView.addArrangedSubview(button)
+         self.startStopButton = button
+         
+         let textField = NSTextField()
+         textField.stringValue = "Server running"
+         textField.isEditable = false
+         textField.isBordered = false
+         textField.drawsBackground = false
+         
+         stackView.addArrangedSubview(textField)
+         self.statusTextField = textField
+         
+         let serverStackInfo = self.createStack()
+         stackView.addArrangedSubview(serverStackInfo.view)
+         serverStackInfo.address.stringValue = Configuration.get(key: .mcp_server_address)
+         serverStackInfo.port.stringValue = Configuration.get(key: .mcp_server_port)
+
+         self.verticalStack({ vStack in
+            vStack.alignment = .left
+            vStack.spacing = 2
+            vStack.addBackground()
+            
+            outerVerticalStack.addArrangedSubview(vStack)
+            
+            self.innerVerticalStack = vStack
+         })
+      })
+   }
+
+   override func viewDidAppear() {
+      super.viewDidAppear()
+      // Make the view itself the first responder, deselecting the text field
+      self.view.window?.makeFirstResponder(self.view)
+      
+      if let mcpTools = SWAMCPServer.getInstance().server?.sharedMCPTools() {
+         let sortedTools = mcpTools.sorted(by: {(lhs,rhs) in
+            lhs.name < rhs.name
+         })
+         
+         self.innerVerticalStack?.addArrangedSubview(NSTextField(labelWithString: "Tools:"))
+         for mcpTool in sortedTools {
+            createToolView(for: mcpTool)
+         }
+      }
+   }
+   
+   private func createToolView(for mcpTool: MCPTool) {
+      // Main horizontal stack for the tool
+      let toolStack = NSStackView()
+      toolStack.orientation = .vertical
+      toolStack.spacing = 2
+      toolStack.distribution = .fill
+      toolStack.alignment = .leading
+      
+      let nameStack = NSStackView()
+      nameStack.orientation = .vertical
+      nameStack.alignment = .leading
+      nameStack.spacing = 2
+      
+      let smallFont = NSFont.systemFont(ofSize: 11)
+      
+      // Name row
+      let nameLabel = NSTextField(labelWithString: "Name")
+      nameLabel.font = smallFont
+      nameLabel.isEditable = false
+      nameLabel.drawsBackground = false
+      nameStack.addArrangedSubview(nameLabel)
+      
+      let nameValueStack = NSStackView()
+      nameValueStack.orientation = .horizontal
+      nameValueStack.spacing = 4
+      
+      let nameField = NSTextField(string: mcpTool.name)
+      nameField.isEditable = false
+      nameField.drawsBackground = false
+      nameField.isBordered = false
+      nameValueStack.addArrangedSubview(nameField)
+      
+      let image = NSImage(systemSymbolName: "document.on.document", accessibilityDescription: nil)
+      
+      let copyButton = NSButton(image: image ?? NSImage(),
+                                target: self,
+                                action: #selector(copyToolName))
+      copyButton.isBordered = false
+      copyButton.tag = mcpTool.name.hashValue
+      copyButton.frame = NSRect(x: 0, y: 0, width: 10, height: 10)
+      nameValueStack.addArrangedSubview(copyButton)
+      
+      nameStack.addArrangedSubview(nameValueStack)
+      
+      // Add columns to main stack
+      toolStack.addArrangedSubview(nameStack)
+      // Description row
+      let descriptionFieldStack = fieldStack(label: "Description", labelFont: smallFont, value: textField(value: String(mcpTool.descriptor.description.prefix(75, " ..."))))
+      toolStack.addArrangedSubview(descriptionFieldStack)
+      
+      mcpTool.attributes.forEach({ attribute in
+         let descriptionStack = NSStackView()
+         descriptionStack.orientation = .vertical
+         descriptionStack.distribution = .fill
+         descriptionStack.alignment = .leading
+         descriptionStack.spacing = 2
+
+         descriptionStack.addArrangedSubview(label(label: "Attribute "+attribute.name, labelFont: smallFont))
+         descriptionStack.addArrangedSubview(textField(value: attribute.description))
+         
+         let key: String = "mcpTool."+mcpTool.name+"."+attribute.name
+         let value: String = Configuration.get(string: key, default: "")
+         if ( !value.isEmpty ) {
+            setValue(mcpTool,attribute,value)
+         }
+         
+         var hasher = Hasher()
+         hasher.combine(mcpTool.name.hashValue)
+         hasher.combine(attribute.name.hashValue)
+         
+         let attributeField = inputField(value: value)
+         attributeField.tag = hasher.finalize()
+         attributeField.delegate = self
+         
+         descriptionStack.addArrangedSubview(attributeField)
+         
+         toolStack.addArrangedSubview(descriptionStack)
+
+         NSLayoutConstraint.activate([
+            descriptionStack.leadingAnchor.constraint(equalTo: toolStack.leadingAnchor,constant: 16),
+            descriptionStack.trailingAnchor.constraint(equalTo: toolStack.trailingAnchor,constant: -16),
+         ])
+      })
+      
+      toolStack.addBackground()
+
+      if let innerVerticalStack = self.innerVerticalStack {
+         innerVerticalStack.addArrangedSubview(toolStack)
+         NSLayoutConstraint.activate([
+            toolStack.leadingAnchor.constraint(equalTo: innerVerticalStack.leadingAnchor,constant: 8),
+            toolStack.trailingAnchor.constraint(equalTo: innerVerticalStack.trailingAnchor,constant: -8),
+         ])
+      }
+   }
+     
+   private func setValue(_ mcpTool: MCPTool,_ attribute: MCPToolAttribute,_ value: String) {
+      if let firstTool = SWAMCPServer.getInstance().server?.sharedMCPTools().first(where: { tool in
+         mcpTool.name == tool.name
+      }) {
+         firstTool.attributeValue(attribute: attribute, value: value)
+      } else {
+         logWarn("Not found")
+      }
+   }
+   
+   private func inputField(value: String) -> NSTextField {
+      let descriptionField = NSTextField(wrappingLabelWithString: value)
+      descriptionField.isEditable = true
+      descriptionField.drawsBackground = true
+      descriptionField.lineBreakMode = .byWordWrapping
+      descriptionField.sizeToFit()
+      
+      return descriptionField
+   }
+
+   private func textField(value: String) -> NSTextField {
+      let descriptionField = NSTextField(wrappingLabelWithString: value)
+      descriptionField.isEditable = false
+      descriptionField.drawsBackground = false
+      descriptionField.lineBreakMode = .byWordWrapping
+      descriptionField.sizeToFit()
+      
+      return descriptionField
+   }
+   
+   private func label(label: String,labelFont: NSFont) -> NSTextField {
+      // Description row
+      let descriptionLabel = NSTextField(labelWithString: label)
+      descriptionLabel.font = labelFont
+      descriptionLabel.isEditable = false
+      descriptionLabel.drawsBackground = false
+      
+      return descriptionLabel
+   }
+   
+   private func fieldStack(label: String,labelFont: NSFont,value: NSView) -> NSStackView {
+      let descriptionStack = NSStackView()
+      descriptionStack.orientation = .vertical
+      descriptionStack.alignment = .leading
+      descriptionStack.spacing = 2
+      
+      // Description row
+      let descriptionLabel = NSTextField(labelWithString: label)
+      descriptionLabel.font = labelFont
+      descriptionLabel.isEditable = false
+      descriptionLabel.drawsBackground = false
+      descriptionStack.addArrangedSubview(descriptionLabel)
+      
+      descriptionStack.addArrangedSubview(value)
+      
+      return descriptionStack
+   }
+   
+   @objc func copyToolName(_ sender: NSButton) {
+      if let toolName = SWAMCPServer.getInstance().server?.sharedMCPTools().first(where: { $0.name.hashValue == sender.tag })?.name {
+         let pasteboard = NSPasteboard.general
+         pasteboard.clearContents()
+         pasteboard.setString(toolName, forType: .string)
+      }
+   }
+   
+   override func viewDidDisappear() {
+      super.viewDidDisappear()
+      
+      guard let window = self.view.window else { return }
+      
+      if !window.isMiniaturized {
+         // Insert your close-specific logic here
+         SWAMCPServer.stop(windowRemoved: true)
+      }
+   }
+
+   @objc func buttonClicked(_ sender: NSButton) {
+      SWAMCPServer.toggle(callback: { (result,error) in
+         if let error {
+            logError(error)
+            return
+         }
+         
+         self.isServerRunning.toggle()
+         
+         if self.isServerRunning {
+            // Start server logic would go here
+            self.statusTextField?.stringValue = "Server running"
+            self.startStopButton?.title = "Stop Server"
+         } else {
+            self.stopServer()
+         }
+      },errorListener: { error in
+         logError(error)
+      })
+   }
+   
+   func stopServer() {
+      // Stop server logic would go here
+      self.statusTextField?.stringValue = "Server stopped"
+      self.startStopButton?.title = "Start Server"
+   }
+}
+
+extension MCPServerViewController {
+   func createStack() -> (view: NSView,address: NSTextField,port: NSTextField) {
+      // Main vertical stack
+      let mainStack = NSStackView()
+      mainStack.orientation = .vertical
+      mainStack.alignment = .left
+      mainStack.spacing = 2
+      
+      mainStack.addBackground(cornerRadius: 6.0,edgeSize: 5.0)
+
+      // Title label
+      let titleLabel = NSTextField()
+      titleLabel.stringValue = "MCP Server"
+      titleLabel.font = NSFont.systemFont(ofSize: 11)
+      titleLabel.isBordered = false
+      titleLabel.isEditable = false
+      titleLabel.drawsBackground = false
+      mainStack.addArrangedSubview(titleLabel)
+      
+      // Horizontal stack for the two columns
+      let columnsStack = NSStackView()
+      columnsStack.orientation = .horizontal
+      columnsStack.spacing = 4
+      columnsStack.distribution = .fillEqually
+      mainStack.addArrangedSubview(columnsStack)
+      
+      NSLayoutConstraint.activate([
+         columnsStack.leftAnchor.constraint(equalTo: mainStack.leftAnchor, constant: 5.0),
+         columnsStack.rightAnchor.constraint(equalTo: mainStack.rightAnchor, constant: -5.0)
+      ])
+      
+      // First column (Address)
+      let addressColumn = NSStackView()
+      addressColumn.orientation = .vertical
+      addressColumn.alignment = .left
+      addressColumn.spacing = 2
+      
+      let addressLabel = NSTextField()
+      addressLabel.stringValue = "Address"
+      addressLabel.font = NSFont.systemFont(ofSize: 11)
+      addressLabel.isBordered = false
+      addressLabel.isEditable = false
+      addressLabel.drawsBackground = false
+      
+      addressColumn.addArrangedSubview(addressLabel)
+      
+      let addressField = NSTextField()
+      addressField.placeholderString = "localhost"
+      addressField.isContinuous = true
+      addressField.tag = "Address".hashValue
+      addressField.delegate = self
+      
+      addressColumn.addArrangedSubview(addressField)
+      
+      NSLayoutConstraint.activate([
+         addressColumn.widthAnchor.constraint(equalToConstant: 175)
+         ])
+      
+      columnsStack.addArrangedSubview(addressColumn)
+      
+      // Second column (Port)
+      let portColumn = NSStackView()
+      portColumn.orientation = .vertical
+      portColumn.alignment = .left
+      portColumn.spacing = 2
+      
+      let portLabel = NSTextField()
+      portLabel.stringValue = "Port"
+      portLabel.font = NSFont.systemFont(ofSize: 11)
+      portLabel.isBordered = false
+      portLabel.isEditable = false
+      portLabel.drawsBackground = false
+      
+      portColumn.addArrangedSubview(portLabel)
+      
+      let portField = NSTextField()
+      portField.placeholderString = "50051"
+      portField.isContinuous = true
+      portField.tag = "Port".hashValue
+      portField.delegate = self
+
+      portColumn.addArrangedSubview(portField)
+      
+      NSLayoutConstraint.activate([
+         portColumn.widthAnchor.constraint(equalToConstant: 75)
+      ])
+
+      columnsStack.addArrangedSubview(portColumn)
+      
+      return (mainStack,addressField,portField)
+   }
+
+}
+
+extension MCPServerViewController: NSTextFieldDelegate {
+   // Called when the text field's value changes (including pastes)
+   func controlTextDidChange(_ notification: Notification) {
+      if let textField = notification.object as? NSTextField {
+         //debug("Text changed to: \(textField.stringValue)")
+         if ( textField.tag == "Address".hashValue ) {
+            Configuration.set(key: .mcp_server_address,value: textField.stringValue)
+            SWAMCPServer.stop(windowRemoved: false)
+            self.stopServer()
+         } else if ( textField.tag == "Port".hashValue ) {
+            Configuration.set(key: .mcp_server_port,value: textField.stringValue)
+            SWAMCPServer.stop(windowRemoved: false)
+            self.stopServer()
+         } else {
+            guard let mcpTools = SWAMCPServer.getInstance().server?.sharedMCPTools() else {
+               logWarn("No tools")
+               return
+            }
+            
+            let currentText = textField.stringValue
+            debug("Text field value changed to: \(currentText)")
+            
+            for mcpTool in mcpTools {
+               if let firstAttribute = mcpTool.attributes.first(where: { attribute in
+                  var hasher = Hasher()
+                  hasher.combine(mcpTool.name.hashValue)
+                  hasher.combine(attribute.name.hashValue)
+                  let hashValue = hasher.finalize()
+                  
+                  return textField.tag == hashValue
+               }) {
+                  // Found!
+                  debug("Found attribute to update")
+                  let key: String = "mcpTool."+mcpTool.name+"."+firstAttribute.name
+                  Configuration.set(string: key, value: currentText)
+                  setValue(mcpTool,firstAttribute,currentText)
+               }
+            }
+         }
+      }
+   }
+}

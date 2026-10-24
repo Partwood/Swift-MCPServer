@@ -43,11 +43,6 @@ struct FileReadLinesTool: Content {
          case name = "name"
          case path = "path"
       }
-
-      //let operation: Operation
-      //let path: String
-      //let name: String
-      //let content: String? // For write operations
    }
    
    init(serverName: String) {
@@ -110,13 +105,9 @@ extension Tool_FileReadLines {
          logWarn("Invalid string!!!")
       }
       
-      var fullContent = Array<Text_Content>()
-      
-      let FileReadLines: Text_Content
-      
-      let FileReadLinesString: String?
+      let fullContent: String?
       do {
-         FileReadLinesString = try FileUtils.readFileToString(atPath: inPath,name: name)
+         fullContent = try FileUtils.readFileToString(atPath: inPath,name: name)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
@@ -124,118 +115,52 @@ extension Tool_FileReadLines {
 
       let subString: String?
       
-      if let content = FileReadLinesString {
-         if let start = content.index(content.startIndex, offsetBy: Int(offset), limitedBy: content.endIndex) {
-            let remainder = String(content[start..<content.endIndex])
-            let parts = remainder.components(separatedBy: .newlines).prefix(length)
-            let joined = parts.joined(separator: "\n")
-            subString = joined
-         } else {
-            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
+      if let content: String = fullContent {
+         let components: Array<String> = content.components(separatedBy: .newlines)
+         
+         if components.count < (offset-1) {
+            let message = "End of file, file:'\(FileUtils.fileURL(path: inPath,name).filePath)'"
             logError(message)
             return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
          }
+         
+         if components.count < (offset+length) {
+            // Caller asked for more than exists, just return whats left
+            subString = (components[offset...]).joined(separator: "\n")
+         } else {
+            subString = (components[offset..<(offset+length)]).joined(separator: "\n")
+         }
       } else {
-         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'")
+         logWarn("No content in file, file:'\(FileUtils.fileURL(path: inPath,name).filePath)'")
          subString = ""
       }
 
+      let text_content: Text_Content
       if let content = subString {
-         FileReadLines = Text_Content(text: content)
-         fullContent.append(FileReadLines)
+         text_content = Text_Content(text: content.hasSuffix("\n") ? content: content+"\n")
       } else {
-         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).path(percentEncoded: false))'"
+         let message = "File not found or has no content, file:'\(FileUtils.fileURL(path: inPath,name).filePath)'"
          logError(message)
          return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
       }
       
-      return MCPResponse.toolSuccess(id: responseId, content: fullContent,serverInfo: serverInfo)
-   }
-}
-
-// MARK: Offset
-extension Tool_FileReadLines {
-   public struct OffsetSuccess {
-      public var offset: Int
-   }
-   
-   public enum OffsetError: Error {
-      case mcpError(response: MCPResponse)
-   }
-   
-   func findByteOffset(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,_ lineOffset: Int) throws -> Int {
-      if ( lineOffset == 0 ) {
-         return 0
-      }
-      
-      let FileFindContentString: String
-      do {
-         if let content = try FileUtils.readFileToString(atPath: inPath,name: name) {
-            FileFindContentString = content
-         } else {
-            throw FileIOError.read_error(FileUtils.fileURL(path: inPath, name),nil)
-         }
-      } catch {
-         logError(error)
-         throw FileIOError.read_error(FileUtils.fileURL(path: inPath, name), error)
-      }
-      
-      let maxByteOffset = FileFindContentString.utf8.count
-      
-      // File read, determine byte offset
-      let lines = FileFindContentString.components(separatedBy: "\n")
-      
-      if ( lines.count <= lineOffset ) {
-         return maxByteOffset-1
-      }
-      
-      var currentByteOffset = 0
-      
-      var adjustedOffset = lineOffset+1
-      for line in lines {
-         adjustedOffset -= 1
-         if ( adjustedOffset <= 0 ) {
-            // Not a read error, we've reached the correct offset.
-            return currentByteOffset
-         }
-         
-         let lineWithNewline = line + "\n"
-         currentByteOffset += lineWithNewline.utf8.count
-      }
-      
-      if ( currentByteOffset >= maxByteOffset) {
-         return maxByteOffset-1
-      }
-      
-      return currentByteOffset
-   }
-
-   // Ensure that the offset value is > 0 and an integer, if using line_offset must have same constraints and be converted
-   public func getByteOffset(_ serverInfo: ServerInfo,_ responseId: String,_ lineOffset: Int,path: String,name:String) throws -> Int {
-      if ( lineOffset == 0 ) {
-         return 0
-      } else if ( lineOffset < 0 ) {
-         let message = "offset is not a positive integer"
-         throw ToolArgumentError.invalid_integer(message: message)
-      } else {
-         return try findByteOffset(serverInfo,responseId,at: path,name: name,lineOffset)
-      }
+      return MCPResponse.toolSuccess(id: responseId, content: [text_content],serverInfo: serverInfo)
    }
 }
 
 extension Tool_FileReadLines {
    private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: FileReadLinesTool.Input.Operation,_ whichPath: String) -> MCPResponse {
       let fileName: String
-      let lineOffset: Int
+      //let lineOffset: Int
       let length: Int
       let offset: Int
 
       do {
          fileName = try toolArguments.asString(FileReadLinesTool.Input.Arguments.name.rawValue, allowEmpty: false)
-         lineOffset = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.offset.rawValue,min: 0)
+         offset = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.offset.rawValue,min: 0)
          length = try toolArguments.asInteger(FileReadLinesTool.Input.Arguments.length.rawValue,max: Tool_FileReadLines.MAX_LINES)
 
-         offset = try getByteOffset(serverInfo, responseId, lineOffset, path: whichPath, name: fileName)
+         //offset = try getByteOffset(serverInfo, responseId, lineOffset, path: whichPath, name: fileName)
       } catch {
          logError(error)
          return MCPResponse.toolError(id: responseId, message: "For operation:'\(operation.rawValue)' \(error.localizedDescription)", serverInfo: serverInfo)

@@ -21,6 +21,7 @@ struct FileFindContentTool: Content {
             let textContent = try String(contentsOf: filePath, encoding: .utf8)
             return textContent
          } else {
+            assertionFailure(ResourceError.resource_not_found.localizedDescription)
             throw ResourceError.resource_not_found
          }
       } catch {
@@ -33,19 +34,13 @@ struct FileFindContentTool: Content {
    
    struct Input: Content, Codable {
       enum Operation: String, Codable, CaseIterable {
-         case findContent = "find_in_file"
+         case findContent = "find_in_path"
       }
 
       enum Arguments: String, Codable, CaseIterable {
          case find = "find"
-         case name = "name"
          case path = "path"
       }
-
-      //let operation: Operation
-      //let path: String
-      //let name: String
-      //let content: String? // For write operations
    }
    
    init(serverName: String) {
@@ -71,22 +66,19 @@ class Tool_FileFindContent {
             "properties": [
                "operation": [
                   "type": "string",
-                  "description": "One of the following values:"+FileFindContentTool.Input.Operation.allCases.map({$0.rawValue}).joined(separator:","),
+                  "description": "Identifies which of the tools operations are to be used",
+                  "enum": FileFindContentTool.Input.Operation.allCases.map({$0.rawValue})
                ],
                "path": [
                   "type": "string",
-                  "description": "The path to a file or directory"
-               ],
-               "name": [
-                  "type": "string",
-                  "description": "The file or directory name"
+                  "description": "The absolute directory path to the target file folder (e.g. '/Users/project/src'). Exclude the file name."
                ],
                "find": [
                   "type": "string",
                   "description": "The regex pattern to find in the file content"
                ]
             ],
-            "required": ["operation", "path", "name", "find"]
+            "required": ["operation", "path", "find"]
          ])
       )
    }
@@ -100,114 +92,149 @@ extension Tool_FileFindContent {
       let byteOffset: Int
    }
    
-   func searchWithRegex(regex: NSRegularExpression, in content: String, caseInsensitive: Bool = false) -> [Range<String.Index>] {
+   func searchWithRegex(regex: Regex<AnyRegexOutput>/*NSRegularExpression*/, in content: String, caseInsensitive: Bool = false) -> [Range<String.Index>] {
       // Perform the search.
-      let matches = regex.matches(
-         in: content,
-         range: NSRange(content.startIndex..., in: content)
-      )
+      let matches = content.matches(of: regex)
+      return matches.map { $0.range }
+//      let matches = regex.matches(
+//         in: content,
+//         range: NSRange(content.startIndex..., in: content)
+//      )
       
       // Extract the matched substrings.
-      let matchedRanges: [Range<String.Index>] = matches.compactMap({ match in
-         let range = match.range(at: 0)
-         
-         if let stringRange = Range(range, in: content) {
-            return stringRange
-         }
-         
-         return nil
-      })
-      
-      return matchedRanges
+//      let matchedRanges: [Range<String.Index>] = matches.compactMap({ match in
+//         let range = match.range
+//         //let range = match.range(at: 0)
+//         
+//         if let stringRange = Range(range, in: content) {
+//            return stringRange
+//         }
+//         
+//         return nil
+//      })
+//      
+//      return matchedRanges
    }
    
    private func find(string pattern: String,content: String,caseInsensitive: Bool = true) throws -> [SearchResult] {
       // Convert the input pattern to a regular expression.
       // This allows the caller to use wildcards like `*.` or regex variants like `a{2,}?`.
-      let regex: NSRegularExpression
+      //let regex: Regex//: NSRegularExpression
       
       do {
-         regex = try NSRegularExpression (
-            pattern: pattern,
-            options: caseInsensitive ? [.caseInsensitive, .anchorsMatchLines] : [.anchorsMatchLines]
-         )
+         let regex = try Regex(pattern)//NSRegularExpression (
+            //pattern: pattern,
+            //options: caseInsensitive ? [.caseInsensitive, .anchorsMatchLines] : [.anchorsMatchLines]
+         //)
+
+         var results: [SearchResult] = []
+         let lines = content.components(separatedBy: "\n")
+         var currentByteOffset = 0
+         var currentCharacterOffset = 0
+         
+         for (lineIdx, line) in lines.enumerated() {
+            // Line indices in editor usually start at 1
+            let lineNumber = lineIdx + 1
+            
+            // Find all occurrences within the current line
+            let ranges = searchWithRegex(regex: regex, in: line)
+            ranges.forEach({ range in
+               // Character distance from start of file
+               let charDistance = content.distance(from: content.startIndex, to: range.lowerBound)
+               
+               // Byte offset (UTF-8)
+               let substring = content[..<range.lowerBound]
+               let byteOffset = substring.utf8.count
+               
+               results.append(SearchResult(
+                  lineNumber: lineNumber,
+                  characterOffset: charDistance,
+                  byteOffset: byteOffset
+               ))
+            })
+            
+            // Add lengths of line + "\n" to offsets for the next iteration
+            let lineWithNewline = line + "\n"
+            currentCharacterOffset += lineWithNewline.count
+            currentByteOffset += lineWithNewline.utf8.count
+         }
+         
+         return results
       } catch {
          let regExError = RegExError.invalid_pattern(pattern, error)
          logError(regExError)
          throw regExError
       }
       
-      var results: [SearchResult] = []
-      let lines = content.components(separatedBy: "\n")
-      var currentByteOffset = 0
-      var currentCharacterOffset = 0
-      
-      for (lineIdx, line) in lines.enumerated() {
-         // Line indices in editor usually start at 1
-         let lineNumber = lineIdx + 1
-         
-         // Find all occurrences within the current line
-         let ranges = searchWithRegex(regex: regex, in: line)
-         ranges.forEach({ range in
-            // Character distance from start of file
-            let charDistance = content.distance(from: content.startIndex, to: range.lowerBound)
-            
-            // Byte offset (UTF-8)
-            let substring = content[..<range.lowerBound]
-            let byteOffset = substring.utf8.count
-            
-            results.append(SearchResult(
-               lineNumber: lineNumber,
-               characterOffset: charDistance,
-               byteOffset: byteOffset
-            ))
-         })
-         
-         // Add lengths of line + "\n" to offsets for the next iteration
-         let lineWithNewline = line + "\n"
-         currentCharacterOffset += lineWithNewline.count
-         currentByteOffset += lineWithNewline.utf8.count
-      }
-      
-      return results
    }
    
-   func findContent(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,name: String,find string:String) -> MCPResponse {
+   private func findContent(at url: URL,content: String) -> Array<String> {
+      var result = Array<String>()
+      
       do {
-         if let FileFindContentString = try FileUtils.readFileToString(atPath: inPath,name: name) {
-            let searchResults = try find(string: string,content: FileFindContentString)
-            
-            var results = [String]()
-            
-            if ( searchResults.isEmpty ) {
-               results.append("Didn't find '" + string + "'")
-            } else {
-               results.append("Found '" + string + "'")
-               for result in searchResults {
-                  let textContent = "- file char offset:\(result.characterOffset), file byte offset:\(result.byteOffset), line:\(result.lineNumber)"
-                  results.append(textContent)
-               }
+         let contents = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+
+         contents.forEach({ fileURL in
+            if ( fileURL.lastPathComponent.hasPrefix(".")) {
+               // Skip any '.' files
+               return
             }
             
-            return MCPResponse.toolSuccess(id: responseId, content: [Text_Content(text: results.joined(separator: "\n"))], serverInfo: serverInfo)
-         } else {
-            let message = "No UTF8 string content present in file:\(name)"
-            logWarn(message)
-            return MCPResponse.toolError(id: responseId, message: message, serverInfo: serverInfo)
+            do {
+               let directory: Bool = try fileURL.isExistingDirectory()
+               if directory {
+                  result.append(contentsOf: findContent(at: fileURL, content: content))
+               } else {
+                  if findContentInFile(in: fileURL, content: content) {
+                     result.append("- file:'\(fileURL.path(percentEncoded: false))'")
+                  }
+               }
+            } catch {
+               logError(error)
+            }
+         })
+      } catch {
+         logError(error)
+      }
+      
+      if !result.isEmpty {
+         result.insert("Found '" + content + "'", at: 0)
+      } else {
+         result.append("Didn't find '" + content + "'")
+      }
+      
+      return result
+   }
+      
+   private func findContentInFile(in url: URL,content: String) -> Bool {
+      do {
+         if let fileContent = try FileUtils.readFileToString(file: url) {
+            let searchResults = try find(string: content,content: fileContent)
+            return !searchResults.isEmpty
          }
       } catch {
          logError(error)
-         return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
       }
+      
+      return false
+   }
+
+   func findContent(_ serverInfo: ServerInfo,_ responseId: String,at inPath: String,find string:String) -> MCPResponse {
+      let path = NSString(string: inPath).expandingTildeInPath
+      let decodedRoot: String = path.removingPercentEncoding ?? path
+      let directoryURL: URL = URL(fileURLWithPath: decodedRoot)
+
+      let contents = findContent(at: directoryURL, content: string)
+      let textContent = Text_Content(text: contents.joined(separator: "\n"))
+      
+      return MCPResponse.toolSuccess(id: responseId, content: [textContent], serverInfo: serverInfo)
    }
 }
 
 extension Tool_FileFindContent {
    private func handleOperation(_ serverInfo: ServerInfo, _ responseId: String, _ toolArguments: ToolArguments,_ operation: FileFindContentTool.Input.Operation,_ whichPath: String) -> MCPResponse {
-      let fileName: String
       let find: String
       do {
-         fileName = try toolArguments.asString("name", allowEmpty: false)
          find = try toolArguments.asString("find", allowEmpty: false)
       } catch {
          return MCPResponse.toolError(id: responseId, message: error.localizedDescription, serverInfo: serverInfo)
@@ -215,7 +242,7 @@ extension Tool_FileFindContent {
       
       switch operation {
       case .findContent:
-         return findContent(serverInfo,responseId,at: whichPath,name: fileName,find: find)
+         return findContent(serverInfo,responseId,at: whichPath,find: find)
       }
    }
 }

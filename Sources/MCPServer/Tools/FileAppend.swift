@@ -149,7 +149,7 @@ extension Tool_FileAppend {
 
       let fileURL = FileUtils.fileURL(path: path,name)
       
-      let fileString = fileURL.path(percentEncoded: false)
+      let fileString = fileURL.filePath
       
       let isDirectory: Bool
       do {

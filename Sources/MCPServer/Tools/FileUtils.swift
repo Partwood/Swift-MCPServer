@@ -102,6 +102,10 @@ class FileUtils {
          throw error
       }
       
+      return try readFileToString(file: fileURL)
+   }
+   
+   public static func readFileToString(file fileURL: URL) throws -> String? {
       do {
          // Read file contents as Data
          let fileData = try Data(contentsOf: fileURL)
@@ -330,6 +334,37 @@ extension FileUtils {
          logError("Failed to write to temporary file: \(error.localizedDescription)")
          logError(error)
          throw error
+      }
+   }
+
+   public func writeFile(_ fileURL: URL,content: String) throws {
+      if let data: Data = content.data(using: .utf8) {
+         try writeFile(fileURL, data: data)
+      } else {
+         let fileError = FileIOError.data_error(fileURL)
+         logError(fileError)
+         throw fileError
+      }
+   }
+   
+   public func writeFile(_ fileURL: URL,data: Data) throws {
+      do {
+         FileManager.default.createFile(atPath: fileURL.path(percentEncoded: false), contents: nil)
+         
+         let originalHandle = try FileHandle(forWritingTo: fileURL)
+         defer {
+            try? originalHandle.close()
+         }
+         
+         // Write new data
+         try originalHandle.write(contentsOf: data)
+      } catch {
+         // Clean up file on error
+         try? FileManager.default.removeItem(at: fileURL)
+         
+         let fileError = FileIOError.write_error(fileURL, error)
+         logError(fileError)
+         throw fileError
       }
    }
 }
