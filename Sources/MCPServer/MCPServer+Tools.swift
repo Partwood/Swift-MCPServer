@@ -27,8 +27,8 @@ extension SwiftMCPServer {
       mcpTool = Tool_FileFindContentInFile(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
-      mcpTool = Tool_FileReadBytes(serverName: self.name)
-      tools[mcpTool.name] = mcpTool
+      //mcpTool = Tool_FileReadBytes(serverName: self.name)
+      //tools[mcpTool.name] = mcpTool
       
       mcpTool = Tool_FileReadLines(serverName: self.name)
       tools[mcpTool.name] = mcpTool
@@ -36,8 +36,8 @@ extension SwiftMCPServer {
       mcpTool = Tool_FileAppend(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
-      mcpTool = Tool_FileInlineInsert(serverName: self.name)
-      tools[mcpTool.name] = mcpTool
+      //mcpTool = Tool_FileInlineInsert(serverName: self.name)
+      //tools[mcpTool.name] = mcpTool
       
       mcpTool = Tool_FileLineInsert(serverName: self.name)
       tools[mcpTool.name] = mcpTool
@@ -45,11 +45,11 @@ extension SwiftMCPServer {
       mcpTool = Tool_FileLineRemove(serverName: self.name)
       tools[mcpTool.name] = mcpTool
 
-      mcpTool = Tool_TeamCity(serverName: self.name)
-      tools[mcpTool.name] = mcpTool
+      //mcpTool = Tool_TeamCity(serverName: self.name)
+      //tools[mcpTool.name] = mcpTool
       
-      mcpTool = Tool_Git(serverName: self.name)
-      tools[mcpTool.name] = mcpTool
+      //mcpTool = Tool_Git(serverName: self.name)
+      //tools[mcpTool.name] = mcpTool
 
       mcpTool = Tool_WebSearch(serverName: self.name)
       tools[mcpTool.name] = mcpTool
