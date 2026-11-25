@@ -81,6 +81,12 @@ struct MCPRequest: Content {
       case method
       case params
    }
+
+   public init(id: Int?, method: String, params: [String : AnyCodable]?) {
+      self.id = id
+      self.method = method
+      self.params = params
+   }
 }
 
 struct Configuration {
@@ -92,7 +98,7 @@ public
 struct MCPResponse: Content {
    var jsonrpc: String = "2.0"
    let id: String?
-   let result: AnyCodable?
+   public let result: AnyCodable?
    let error: MCPError?
 
    let method: String?

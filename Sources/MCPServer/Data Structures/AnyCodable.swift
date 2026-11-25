@@ -9,7 +9,7 @@ import Vapor
 // Helper to handle any Codable type
 public
 struct AnyCodable: Codable, @unchecked Sendable {
-   let value: Any
+   public let value: Any
    
    public
    init(_ value: Any) {
